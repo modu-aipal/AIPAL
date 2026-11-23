@@ -8,7 +8,7 @@ C 엔진(`calc_engine/`)은 **v1.0 요청·응답 틀을 그대로 지키면서*
 | v1.0 가정 | 실제 데이터 (docs/DATA.md) | 엔진 처리 (지금 동작) | B에 제안 |
 |---|---|---|---|
 | 시간 `year_month` (월) | **분기만 있음** | `period`가 분기 경계(start 1·4·7·10월, end 3·6·9·12월)면 해당 분기로 계산, 아니면 `INVALID_REQUEST`. `group_by: ["year_month"]`는 분기로 묶고 값은 `"2025Q4"`, notes `quarter_granularity` | 데이터셋 메타의 시간 컬럼을 `quarter`로, 기간을 분기 경계로 만들기 |
-| 업종 7개 묶음 (카페·음식점…) | **실제 62개 업종** | 실제 업종 이름과 묶음 이름 둘 다 받음. 묶음은 실제 업종으로 펼치고 notes `industry_group: 카페=커피-음료` | `allowed_values`를 실제 업종으로 넓히거나 묶음 유지. 묶음 매핑은 docs/DATA.md 4절(팀 검토) |
+| 업종 7개 묶음 (카페·음식점…) | **실제 63개 업종** (20곳 기준. 처음 5곳은 62개) | 실제 업종 이름과 묶음 이름 둘 다 받음. 묶음은 실제 업종으로 펼치고 notes `industry_group: 카페=커피-음료` | `allowed_values`를 실제 업종으로 넓히거나 묶음 유지. 묶음 매핑은 docs/DATA.md 4절(팀 검토) |
 | `store_count` | 점포 데이터(OA-22172) 연결로 **제공** | 전체 점포 수(프랜차이즈 포함). `franchise_count`, `open_count`, `close_count`, `general_store_count`도 있음 | 데이터셋 메타 그대로 사용 가능 |
 | `avg` (뜻 미정) | — | **분기당 평균** = 기간 합계 ÷ 기간 내 분기 수. `methods[].formula`에 명시 | 이 정의로 합의 |
 | 비율 없음 | 주말·야간·성별·연령 비중 필요 | v1.1 확장 op (아래 2절) | 필요해지면 `AggOp`에 추가 |
