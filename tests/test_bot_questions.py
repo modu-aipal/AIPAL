@@ -178,7 +178,7 @@ def test_per_store_only_on_sales_columns():
 
 # ---------------------------------------------------------------- 막힐 때: 이유 + 서버가 검증한 제안
 BLOCKED = [
-    "성수에서 카페 차리면 괜찮을까?", "건대와 이태원 중 창업하기 좋은 곳은?", "홍대 음식점 월별 매출 보여줘",
+    "성수 카페 추천해줘", "건대와 이태원 중 창업하기 좋은 곳은?", "홍대 음식점 월별 매출 보여줘",
     "카페 점포 비중이 높은 상권은?", "잠실 매출 알려줘", "노량진 매출 알려줘", "성수의 카페 매출 비교",
     "2025년 2월 성수 매출", "분석 좀 해줘", "서점 매출 알려줘",
 ]
@@ -195,7 +195,7 @@ def test_blocked_questions_get_reason_and_runnable_suggestions(q):
 
 
 def test_judgment_suggestions_keep_user_context():
-    r = ev("성수에서 카페 차리면 괜찮을까?")
+    r = ev("성수 카페 추천해줘")
     assert "지원하지 않습니다" in r.reason
     assert any("성수" in s and "카페" in s for s in r.suggested_questions)
 
@@ -255,7 +255,7 @@ def test_unavailable_terms_still_blocked():
 
 
 def test_suggestions_do_not_recurse():
-    r = planner.evaluate("성수에서 카페 차리면 괜찮을까?", NULL, DS, LATEST, suggest=False)
+    r = planner.evaluate("성수 카페 추천해줘", NULL, DS, LATEST, suggest=False)
     assert r.suggested_questions == []
 
 
@@ -359,13 +359,13 @@ def _fake_llm(monkeypatch, payload):
 
 def test_api_plan_returns_suggested_questions(monkeypatch):
     _fake_llm(monkeypatch, {"status": "ok", "intent": "other"})
-    b = client.post("/api/plan", json={"question": "성수에서 카페 차리면 괜찮을까?"}).json()
+    b = client.post("/api/plan", json={"question": "성수 카페 추천해줘"}).json()
     assert b["status"] == "needs_clarification" and len(b["suggested_questions"]) >= 1
 
 
 def test_dashboard_422_carries_suggestions(monkeypatch):
     _fake_llm(monkeypatch, {"status": "ok", "intent": "other"})
-    r = client.post("/api/dashboard/analyze", json={"question": "성수에서 카페 차리면 괜찮을까?"})
+    r = client.post("/api/dashboard/analyze", json={"question": "성수 카페 추천해줘"})
     d = r.json()["detail"]
     assert r.status_code == 422 and d["error"] == "needs_clarification" and d["suggested_questions"]
 
@@ -614,3 +614,30 @@ def test_explanation_timeout_keeps_structure(monkeypatch):
     text = r.json()["text"]
     assert r.status_code == 200 and text.split("\n\n")[0].count("• ") == 2  # 해석만 빠지고 결론·목록은 나간다
     assert "※ 기준:" in text
+
+
+@pytest.mark.parametrize("q", ["성수 카페 점포당 매출 알려줘", "성수 카페 한 곳당 매출은?", "성수 카페 가게당 매출 알려줘"])
+def test_per_store_wording_with_industry(q):
+    p = okplan(q)
+    assert [(m.column, m.op) for m in p.metrics] == [("est_sales", "per_store")]
+    assert p.industries == ["카페"] and p.regions == ["성수"]
+
+
+# ---------------------------------------------------------------- 창업 가부 질문은 현황 데이터로 답한다
+def test_startup_question_answers_with_store_count_and_per_store():
+    p = okplan("성수에서 카페 차리면 괜찮을까?")
+    assert p.intent == "lookup" and p.regions == ["성수"] and p.industries == ["카페"]
+    assert [(m.column, m.op) for m in p.metrics] == [
+        ("store_count", "avg"), ("est_sales", "per_store"), ("est_sales", "sum"), ("est_sales", "growth_rate")]
+    assert p.disclaimers and "추천이 아닙니다" in p.disclaimers[0]
+
+
+def test_startup_question_with_two_areas_compares():
+    p = okplan("성수와 홍대 중 카페 창업하기 좋은 곳은?")
+    assert p.intent == "region_comparison" and p.sort_by == "est_sales.per_store"
+
+
+@pytest.mark.parametrize("q", ["성수 카페 성공 확률은?", "성수 카페 유망해?", "성수 카페 추천해줘", "성수에서 창업하면 괜찮을까?"])
+def test_startup_judgments_stay_blocked(q):
+    r = ev(q)
+    assert r.status == "needs_clarification" and "지원하지 않습니다" in r.reason
