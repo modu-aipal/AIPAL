@@ -619,7 +619,7 @@ def test_explanation_timeout_keeps_structure(monkeypatch):
 @pytest.mark.parametrize("q", ["성수 카페 점포당 매출 알려줘", "성수 카페 한 곳당 매출은?", "성수 카페 가게당 매출 알려줘"])
 def test_per_store_wording_with_industry(q):
     p = okplan(q)
-    assert [(m.column, m.op) for m in p.metrics] == [("est_sales", "per_store")]
+    assert [(m.column, m.op) for m in p.metrics] == [("est_sales", "per_store"), ("store_count", "avg")]
     assert p.industries == ["카페"] and p.regions == ["성수"]
 
 
@@ -641,3 +641,77 @@ def test_startup_question_with_two_areas_compares():
 def test_startup_judgments_stay_blocked(q):
     r = ev(q)
     assert r.status == "needs_clarification" and "지원하지 않습니다" in r.reason
+
+
+# ---------------------------------------------------------------- 점포당 표현 사전
+PER_STORE_PHRASES = [
+    "점포당 매출", "점포별 매출", "가게당 매출", "가게별 매출", "매장당 매출", "매장별 매출", "업소당 매출",
+    "가게 하나당 매출", "한 집당 얼마", "한 곳당 매출", "1개 점포 매출", "점포 1곳당 월매출", "점포 한 곳 매출",
+    "점포 수 대비 매출", "매출 점포 수로 나눠줘", "가게 평균 매출", "점포마다 매출", "점포당 연매출",
+]
+
+
+@pytest.mark.parametrize("phrase", PER_STORE_PHRASES)
+def test_per_store_phrases_all_recognized(phrase):
+    p = okplan(f"성수 카페 {phrase}")
+    assert p.metrics[0].column == "est_sales" and p.metrics[0].op == "per_store", phrase
+
+
+@pytest.mark.parametrize("q", ["점포당 매출 높은 곳", "점포별 매출 TOP 5", "가게별 매출이 가장 높은 곳"])
+def test_per_store_ranking_phrases_sort_by_per_store(q):
+    p = okplan(q)
+    assert p.intent == "ranking" and p.sort_by == "est_sales.per_store"
+
+
+@pytest.mark.parametrize("q", ["점포 수 많은 곳", "성수 점포 수 알려줘", "성수 카페 매출", "별로 안 되는 가게는?", "성수 가게 수"])
+def test_per_store_not_triggered_by_lookalikes(q):
+    r = ev(q)
+    if r.status == "ok":
+        assert not any(m.op == "per_store" for m in r.plan.metrics), q
+
+
+def test_per_store_lookup_adds_store_count_as_evidence():
+    p = okplan("성수 카페 점포별 매출")
+    assert [(m.column, m.op) for m in p.metrics] == [("est_sales", "per_store"), ("store_count", "avg")]
+
+
+def test_per_store_with_store_count_question():
+    p = okplan("성수 카페 점포당 매출과 점포 수")
+    assert {(m.column, m.op) for m in p.metrics} == {("est_sales", "per_store"), ("store_count", "avg")}
+
+
+def test_per_store_growth_adds_growth_with_note():
+    p = okplan("성수 점포당 매출 증가율")
+    assert {m.op for m in p.metrics} >= {"per_store", "growth_rate"}
+    assert any("점포당 값의 증감이 아닙니다" in a for a in p.assumptions)
+
+
+def test_per_store_annual_wording_notes_monthly_basis():
+    p = okplan("성수 카페 점포당 연매출")
+    assert any("월평균" in a for a in p.assumptions)
+
+
+@pytest.mark.parametrize("q", ["성수 카페 평균 매출", "성수 카페 월평균 매출"])
+def test_ambiguous_average_shows_per_store_and_total(q):
+    p = okplan(q)
+    assert [(m.column, m.op) for m in p.metrics][:2] == [("est_sales", "per_store"), ("est_sales", "sum")]
+    assert any("평균 매출" in a for a in p.assumptions)
+
+
+def test_avg_ticket_is_not_silently_turned_into_total():
+    r = ev("성수 카페 객단가")
+    assert r.status == "needs_clarification" and "객단가" in r.reason and r.suggested_questions
+
+
+@pytest.mark.parametrize("concept", ["size", "overall", "none"])
+def test_per_store_wording_beats_model_concept(concept):
+    d = PlanDraft(status="ok", intent="ranking", concept=concept)
+    r = planner.evaluate("점포별 매출 TOP 3", d, DS, LATEST)
+    assert r.status == "ok" and r.plan.sort_by == "est_sales.per_store"
+
+
+def test_ambiguous_average_with_quarter_in_question():
+    p = okplan("2026년 2분기 성수 카페 평균 매출")
+    assert [(m.column, m.op) for m in p.metrics][:2] == [("est_sales", "per_store"), ("est_sales", "sum")]
+    q = okplan("성수 카페 분기 평균 매출")
+    assert not any(m.op == "per_store" for m in q.metrics)

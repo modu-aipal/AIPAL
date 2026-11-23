@@ -1,4 +1,6 @@
 """질문 속 지표 표현 -> 지표 컬럼과 연산. 모델이 놓쳐도 코드가 근거 있는 지표를 잡는다."""
+import re
+
 from app.schemas.plan import MetricSpec
 
 # 분기마다 쌓이는 '현재 값'이라 여러 분기를 합치면 중복 집계되므로 분기당 평균(avg)으로 보낸다
@@ -6,7 +8,45 @@ STOCK_COLUMNS = {"store_count", "general_store_count", "franchise_count"}
 MAX_METRICS = 3
 
 GROWTH_WORDS = ("증가", "증감", "감소", "성장", "상승", "하락")
-PER_STORE_WORDS = ("점포당", "가게당", "매장당", "한 곳당", "한곳당", "점포 한 곳", "가게 한 곳")
+
+# ---- 점포당(한 곳당) 표현: '분모 단어'와 '나누는 말'을 따로 보고, 붙어 있을 때만 인정한다 ----
+_DEN = r"(?:점포|가게|매장|업소|상점|업체|사업체)"
+_PER_STORE_RES = (
+    re.compile(_DEN + r"\s*(?:당|별|마다)"),                                   # 점포당·가게별·매장마다
+    re.compile(_DEN + r"\s*(?:하나|한\s*곳|한\s*개|1\s*곳|1\s*개)\s*(?:당|마다)?"),     # 점포 한 곳, 가게 하나당, 점포 1곳당
+    re.compile(r"(?:한|1)\s*(?:곳|개|집)\s*(?:당|마다)"),                           # 한 곳당, 한 집당, 1개당
+    re.compile(r"(?:한|1)\s*(?:개|곳)\s*" + _DEN),                              # 1개 점포 매출
+    re.compile(_DEN + r"\s*(?:수|숫자)?\s*(?:대비|로\s*나눈|로\s*나눠|으로\s*나눈|으로\s*나눠|나누어)"),  # 점포 수 대비, 점포 수로 나눠
+    re.compile(_DEN + r"\s*(?:의\s*)?(?:월\s*)?평균\s*(?:월\s*)?(?:매출|수입|판매)"),  # 가게 평균 매출
+)
+_STORE_COUNT_RE = re.compile(r"(?:점포|가게|매장|업소)\s*(?:수|숫자)|몇\s*(?:개|곳)")
+_AVG_SALES_RE = re.compile(r"평균\s*(?:월\s*)?(?:매출|수입)|월평균|월\s*평균")
+_QUARTER_AVG_RE = re.compile(r"분기\s*(?:당|별)?\s*평균")
+_ANNUAL_RE = re.compile(r"연\s*매출|연간|1\s*년\s*(?:치|매출)|일\s*년")
+AVG_TICKET_WORDS = ("객단가", "객 단가", "건당 금액", "결제 한 건당", "한 건당")
+
+
+def is_per_store(q: str) -> bool:
+    """'점포당·가게별·매장마다·한 곳당·점포 수 대비·가게 평균 매출' 같은 점포당 표현인가."""
+    return any(r.search(q) for r in _PER_STORE_RES)
+
+
+def wants_store_count(q: str) -> bool:
+    return bool(_STORE_COUNT_RE.search(q))
+
+
+def is_ambiguous_average(q: str) -> bool:
+    """'평균 매출·월평균 매출'처럼 점포당인지 지역 합계 평균인지 알 수 없는 표현 (점포당 표현이 아닐 때)."""
+    return bool(_AVG_SALES_RE.search(q)) and "매출" in q and not is_per_store(q) and not _QUARTER_AVG_RE.search(q)
+
+
+def mentions_annual(q: str) -> bool:
+    return bool(_ANNUAL_RE.search(q))
+
+
+def mentions_avg_ticket(q: str) -> bool:
+    return any(w in q for w in AVG_TICKET_WORDS)
+
 RATIO_WORDS = ("비중", "비율", "퍼센트", "개업률", "폐업률")
 
 
@@ -30,11 +70,16 @@ def infer_metrics(q: str, cols: set[str]) -> list[MetricSpec]:
         sales = "male_sales"
     elif "여성" in q:
         sales = "female_sales"
-    elif "매출" in q or any(w in q for w in PER_STORE_WORDS):
+    elif "매출" in q or is_per_store(q):
         sales = "est_sales"
-    per_store = any(w in q for w in PER_STORE_WORDS)
+    per_store = is_per_store(q)
     if per_store:
         add(sales or "est_sales", "per_store")
+        if wants_store_count(q):  # "점포당 매출과 점포 수"
+            add("store_count", "avg")
+    elif is_ambiguous_average(q):  # 평균 매출: 점포당 월평균과 합계를 둘 다 보여 준다
+        add(sales or "est_sales", "per_store")
+        add(sales or "est_sales", "sum")
     elif sales:
         add(sales, "sum")
 
