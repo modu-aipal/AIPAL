@@ -8,12 +8,14 @@
     data/dong_rank.csv). 지도 좌표(pos)는 대시보드 쪽 값이라 여기서 만들지 않는다
 - 새 키: stores(전체 점포), per_store(점포당 월평균 매출, 만 원), avg_ticket(객단가 = 매출 ÷ 결제 건수, 원),
         open_rate·close_rate(개업·폐업 점포 ÷ 전체 점포, %), franchise_rate(프랜차이즈 ÷ 전체 점포, %),
-        dong_count(묶은 행정동 수), cautions(해석 주의 문구)
+        dong_count(묶은 행정동 수), type(market=시장·도매형 / city=소비·서비스형, 대시보드와 같은 규칙),
+        cautions(해석 주의 문구)
 숫자는 화면 표시 규칙(docs/DATA.md 6절)대로 반올림: 억 원·% 소수 첫째 자리, 만 원·원은 정수.
 
 사용법: python calc_engine/scripts/build_dashboard_data.py [기준분기, 예: 20262 (기본: 데이터 마지막 분기)]
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -26,8 +28,8 @@ from calc_engine.data import DATA_SOURCE, DATA_VERSION, DEFAULT_DATA, load_sales
 T, CNT = "당월_매출_금액", "당월_매출_건수"
 BANDS = ["00~06", "06~11", "11~14", "14~17", "17~21", "21~24"]
 AGES = ["10", "20", "30", "40", "50", "60_이상"]
-# 매출 대부분이 도매 업종인 동 (docs/DATA.md 7절)
-WHOLESALE = {"노량진2동": "수산물판매", "제기동": "청과상"}
+# 상권 유형: 대시보드(dashboard/index.html TYPES)와 같은 규칙. 1위 업종이 이 이름을 포함하면 시장·도매형
+MARKET = re.compile(r"청과|수산|반찬|육류|축산|농산|건어물|도매")
 
 
 def eok(v):
@@ -55,9 +57,11 @@ def build(sales: pd.DataFrame, stores: pd.DataFrame, area_map: pd.DataFrame, lat
         notes = []
         if len(a) > 1:
             notes.append(f"행정동 {len(a)}개 묶음이라 총매출이 커 보일 수 있어요. 점포당 매출로 비교하세요.")
-        if name in WHOLESALE:
-            share = float(ind.get(WHOLESALE[name], 0.0)) / total * 100
-            notes.append(f"매출의 {share:.1f}%가 {WHOLESALE[name]}(도매시장)이라 일반 상권과 단순 비교하면 오해할 수 있어요.")
+        top, top_share = names[0], float(ind.iloc[0]) / total * 100
+        market = bool(MARKET.search(top))
+        if market:
+            notes.append(f"시장·도매형 상권이에요. 1위 업종 {top}이 매출의 {top_share:.1f}%라, "
+                         "창업 입지로 비교하려면 음식점·카페 같은 소매 업종만 걸러서 보세요.")
         areas.append({
             "id": area_id,
             "name": name,
@@ -82,6 +86,7 @@ def build(sales: pd.DataFrame, stores: pd.DataFrame, area_map: pd.DataFrame, lat
             "close_rate": round(sq["폐업_점포_수"].sum() / store_n * 100, 1) if store_n else None,
             "franchise_rate": round(sq["프랜차이즈_점포_수"].sum() / store_n * 100, 1) if store_n else None,
             "dong_count": len(a),
+            "type": "market" if market else "city",
             "cautions": notes,
         })
     return {

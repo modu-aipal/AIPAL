@@ -129,8 +129,9 @@
    "close_rate": 2.3,
    "franchise_rate": 2.1,
    "dong_count": 1,
+   "type": "market",
    "cautions": [
-    "매출의 80.9%가 청과상(도매시장)이라 일반 상권과 단순 비교하면 오해할 수 있어요."
+    "시장·도매형 상권이에요. 1위 업종 청과상이 매출의 80.9%라, 창업 입지로 비교하려면 음식점·카페 같은 소매 업종만 걸러서 보세요."
    ]
   },
   {
@@ -234,8 +235,9 @@
    "close_rate": 0.9,
    "franchise_rate": 3.7,
    "dong_count": 1,
+   "type": "market",
    "cautions": [
-    "매출의 91.2%가 수산물판매(도매시장)이라 일반 상권과 단순 비교하면 오해할 수 있어요."
+    "시장·도매형 상권이에요. 1위 업종 수산물판매이 매출의 91.2%라, 창업 입지로 비교하려면 음식점·카페 같은 소매 업종만 걸러서 보세요."
    ]
   },
   {
@@ -339,6 +341,7 @@
    "close_rate": 1.9,
    "franchise_rate": 8.1,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -442,6 +445,7 @@
    "close_rate": 2.2,
    "franchise_rate": 6.3,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -545,6 +549,7 @@
    "close_rate": 1.9,
    "franchise_rate": 4.9,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -648,6 +653,7 @@
    "close_rate": 2.1,
    "franchise_rate": 7.6,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -751,7 +757,10 @@
    "close_rate": 1.0,
    "franchise_rate": 2.0,
    "dong_count": 1,
-   "cautions": []
+   "type": "market",
+   "cautions": [
+    "시장·도매형 상권이에요. 1위 업종 반찬가게이 매출의 70.2%라, 창업 입지로 비교하려면 음식점·카페 같은 소매 업종만 걸러서 보세요."
+   ]
   },
   {
    "id": "hongdae",
@@ -854,6 +863,7 @@
    "close_rate": 2.8,
    "franchise_rate": 8.1,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -957,7 +967,10 @@
    "close_rate": 2.6,
    "franchise_rate": 12.7,
    "dong_count": 1,
-   "cautions": []
+   "type": "market",
+   "cautions": [
+    "시장·도매형 상권이에요. 1위 업종 수산물판매이 매출의 76.3%라, 창업 입지로 비교하려면 음식점·카페 같은 소매 업종만 걸러서 보세요."
+   ]
   },
   {
    "id": "yeouido",
@@ -1060,6 +1073,7 @@
    "close_rate": 2.0,
    "franchise_rate": 10.7,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -1163,6 +1177,7 @@
    "close_rate": 2.6,
    "franchise_rate": 4.8,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -1269,6 +1284,7 @@
    "close_rate": 2.3,
    "franchise_rate": 6.0,
    "dong_count": 4,
+   "type": "city",
    "cautions": [
     "행정동 4개 묶음이라 총매출이 커 보일 수 있어요. 점포당 매출로 비교하세요."
    ]
@@ -1374,6 +1390,7 @@
    "close_rate": 1.7,
    "franchise_rate": 4.4,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -1477,6 +1494,7 @@
    "close_rate": 2.3,
    "franchise_rate": 6.0,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -1580,7 +1598,10 @@
    "close_rate": 2.9,
    "franchise_rate": 9.7,
    "dong_count": 1,
-   "cautions": []
+   "type": "market",
+   "cautions": [
+    "시장·도매형 상권이에요. 1위 업종 반찬가게이 매출의 21.4%라, 창업 입지로 비교하려면 음식점·카페 같은 소매 업종만 걸러서 보세요."
+   ]
   },
   {
    "id": "myeong",
@@ -1683,6 +1704,7 @@
    "close_rate": 1.4,
    "franchise_rate": 10.3,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -1786,7 +1808,10 @@
    "close_rate": 3.1,
    "franchise_rate": 10.4,
    "dong_count": 1,
-   "cautions": []
+   "type": "market",
+   "cautions": [
+    "시장·도매형 상권이에요. 1위 업종 육류판매이 매출의 71.5%라, 창업 입지로 비교하려면 음식점·카페 같은 소매 업종만 걸러서 보세요."
+   ]
   },
   {
    "id": "nonhyeon",
@@ -1889,6 +1914,7 @@
    "close_rate": 2.6,
    "franchise_rate": 6.6,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -1992,6 +2018,7 @@
    "close_rate": 2.8,
    "franchise_rate": 13.0,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   },
   {
@@ -2095,6 +2122,7 @@
    "close_rate": 2.9,
    "franchise_rate": 5.9,
    "dong_count": 1,
+   "type": "city",
    "cautions": []
   }
  ]

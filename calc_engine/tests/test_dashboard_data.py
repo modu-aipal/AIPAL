@@ -55,6 +55,15 @@ def test_cautions():
     assert a["hongdae"]["cautions"] == []
 
 
+def test_market_type_matches_dashboard_rule():
+    # 대시보드 TYPES: 1위 업종이 청과·수산·반찬·육류·축산·농산·건어물·도매면 시장·도매형 (2026Q2 기준 6곳)
+    a = areas("20262")
+    market = sorted(x["name"] for x in a.values() if x["type"] == "market")
+    assert market == sorted(["제기동", "노량진2동", "가락1동", "노량진1동", "영등포동", "독산1동"])
+    assert all(any("시장·도매형" in c for c in x["cautions"]) for x in a.values() if x["type"] == "market")
+    assert all(not any("시장·도매형" in c for c in x["cautions"]) for x in a.values() if x["type"] == "city")
+
+
 def test_committed_file_is_up_to_date():
     latest = sales["기준_년분기_코드"].max()
     expected = bdd.build(sales, stores, area_map, latest, dong_rank)
