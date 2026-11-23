@@ -1,4 +1,4 @@
-"""C 엔진 실제 데이터 기준(분기 단위, 업종 62종, 점포 수 없음) 회귀 테스트."""
+"""C 엔진 실제 데이터 기준(분기 단위, 업종 63종, 점포 수 없음) 회귀 테스트."""
 import json
 
 import pytest
@@ -44,7 +44,7 @@ def test_dataset_meta_matches_engine():
     assert len(cols["region"].allowed_values) == 20  # 대시보드와 같은 20곳
     assert cols["quarter"].dtype == "date" and "year_month" not in cols
     assert {"est_sales", "est_count", "weekend_sales"} <= set(cols)
-    assert len(REAL_INDUSTRIES) == 62 and len(set(REAL_INDUSTRIES)) == 62
+    assert len(REAL_INDUSTRIES) == 63 and len(set(REAL_INDUSTRIES)) == 63
     assert set(INDUSTRY_GROUPS) <= set(INDUSTRIES)
     assert len(INDUSTRIES) == len(set(INDUSTRIES))
 

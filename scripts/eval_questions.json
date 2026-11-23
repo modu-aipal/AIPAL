@@ -954,6 +954,58 @@
         "intent": "ranking",
         "primary": "store_count.avg"
       }
+    },
+    {
+      "id": 79,
+      "tag": "info-gate",
+      "q": "성수 행정동별 매출 보여줘",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ]
+      }
+    },
+    {
+      "id": 80,
+      "tag": "info-gate",
+      "q": "강남 최신 분기 매출",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "강남"
+        ]
+      }
+    },
+    {
+      "id": 81,
+      "tag": "info-gate",
+      "q": "시장 도매형 상권 매출 순위",
+      "expect": {
+        "intent": "ranking"
+      }
+    },
+    {
+      "id": 82,
+      "tag": "info",
+      "q": "최신 분기가 언제야?",
+      "expect": {
+        "status": "info"
+      }
+    },
+    {
+      "id": 83,
+      "tag": "industry",
+      "q": "명동 부동산중개업 매출 알려줘",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "명동"
+        ],
+        "industries": [
+          "부동산중개업"
+        ]
+      }
     }
   ]
 }
