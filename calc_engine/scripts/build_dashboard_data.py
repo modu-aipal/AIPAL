@@ -10,6 +10,8 @@
         open_rate·close_rate(개업·폐업 점포 ÷ 전체 점포, %), franchise_rate(프랜차이즈 ÷ 전체 점포, %),
         dong_count(묶은 행정동 수), type(market=시장·도매형 / city=소비·서비스형, 대시보드와 같은 규칙),
         cautions(해석 주의 문구)
+- 업종별 점포: ind_store(ind와 같은 순서 [업종, 점포 수, 점포당 월평균 매출 만 원]),
+              cafe_store(커피-음료 [점포 수, 점포당 월평균 매출 만 원]). 점포 수가 0이면 매출 칸은 null
 숫자는 화면 표시 규칙(docs/DATA.md 6절)대로 반올림: 억 원·% 소수 첫째 자리, 만 원·원은 정수.
 
 사용법: python calc_engine/scripts/build_dashboard_data.py [기준분기, 예: 20262 (기본: 데이터 마지막 분기)]
@@ -54,6 +56,12 @@ def build(sales: pd.DataFrame, stores: pd.DataFrame, area_map: pd.DataFrame, lat
         names = list(ind.index)
         cafe = float(ind.get("커피-음료", 0.0))
         store_n = int(sq["전체_점포_수"].sum())
+        ind_n = sq.groupby("서비스_업종_코드_명")["전체_점포_수"].sum()
+
+        def ind_store(k, v):
+            n = int(ind_n.get(k, 0))
+            return [k, n, round(v / (n * 3) / 1e4) if n else None]
+
         notes = []
         if len(a) > 1:
             notes.append(f"행정동 {len(a)}개 묶음이라 총매출이 커 보일 수 있어요. 점포당 매출로 비교하세요.")
@@ -88,12 +96,14 @@ def build(sales: pd.DataFrame, stores: pd.DataFrame, area_map: pd.DataFrame, lat
             "dong_count": len(a),
             "type": "market" if market else "city",
             "cautions": notes,
+            "ind_store": [ind_store(k, v) for k, v in ind.head(8).items()],
+            "cafe_store": ind_store("커피-음료", cafe)[1:],
         })
     return {
         "meta": {
             "latest_quarter": label(latest),
             "quarters": [label(x) for x in quarters],
-            "units": {"sales·ind·day·band·age·male·female·weekday·weekend·cafe[1]": "억 원", "per_store": "만 원 (점포당 월평균)",
+            "units": {"sales·ind·day·band·age·male·female·weekday·weekend·cafe[1]": "억 원", "per_store·ind_store[2]·cafe_store[1]": "만 원 (점포당 월평균)",
                       "avg_ticket": "원 (매출 ÷ 결제 건수)", "*_rate·ind[1]·cafe[0]": "%"},
             "notes": [
                 "추정 매출(신한카드 결제 기반 추정치)이며 실제 매출이 아닙니다.",

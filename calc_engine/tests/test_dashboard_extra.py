@@ -17,7 +17,7 @@ EXTRA_MAP = pd.read_csv(HERE / "data" / "extra_area_map.csv", dtype=str)
 OLD_KEYS = ["id", "name", "dongs", "rank", "gu", "sales", "ind", "day", "band", "age",
             "male", "female", "weekday", "weekend", "cafe"]  # 대시보드 EXTRA 키 (pos는 대시보드 쪽 값)
 NEW_KEYS = ["stores", "per_store", "avg_ticket", "open_rate", "close_rate", "franchise_rate",
-            "dong_count", "type", "cautions"]
+            "dong_count", "type", "cautions", "ind_store", "cafe_store"]
 
 
 def test_shape_and_keys():
