@@ -22,6 +22,8 @@
 | `calc_engine/scripts/build_store_dataset.py` | 점포 원본 → `stores_areas.csv`. 컬럼 이름을 일반_점포_수·전체_점포_수로 통일 |
 | `calc_engine/data/dong_rank.csv` | 23개 동의 분기별 **서울 전체 행정동(약 425개) 매출 순위**. 원본에서 계산 (대시보드 `rank`와 같은 정의) |
 | `calc_engine/data/dashboard_data.json` | **대시보드용 20곳 데이터**. 기존 대시보드 `AREAS`와 같은 키·단위(2025Q4 기준으로 만들면 20곳 × 14개 항목 전부 일치) + 새 항목(점포 수, 점포당 월평균, 객단가, 개업·폐업률, 프랜차이즈 비율, 주의 문구). 기준 분기 2026Q2, 최근 8개 분기. `build_dashboard_data.py`로 생성 |
+| `calc_engine/data/extra_area_map.csv` | 대시보드 지도의 나머지 **80곳**(dashboard `EXTRA`) 목록: id(`d`+행정동 코드)·이름·구·행정동 코드 |
+| `calc_engine/data/dashboard_data_extra.json` | 80곳을 20곳과 같은 형식으로 만든 대시보드용 데이터(기준 2026Q2, `gu` 키 추가). 2025Q4 기준으로 만들면 대시보드 `EXTRA` 80곳 × 15항목 **1,200개 전부 일치**. 80곳은 가공 데이터를 레포에 두지 않고 **원본(`raw/`)에서 바로 생성**(`build_dashboard_extra.py`)하므로, 원본이 없으면 다시 만들 수 없음 |
 | `calc_engine/scripts/build_dataset.py` | 원본 CSV 여러 개 → `sales_areas.csv`. 파일끼리 겹치는 행은 숫자가 모두 같은지 확인하고 앞 파일(공식 파일)을 씀 |
 | `calc_engine/scripts/answer_key.py` | 정답표 다시 계산 |
 
