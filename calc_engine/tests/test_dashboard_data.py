@@ -48,6 +48,33 @@ def test_new_fields_2026q2_match_site():
     assert h["avg_ticket"] == round(364_283_677_777 / sales[(sales["기준_년분기_코드"] == "20262") & (sales["지역"] == "홍대")]["당월_매출_건수"].sum())
 
 
+def test_industry_stores_2026q2():
+    a = areas("20262")
+    # 커피-음료 2026Q2: 성수 596곳·월 956만 원, 명동 323곳·월 2,373만 원 (stores_areas.csv · sales_areas.csv 직접 합계)
+    assert a["seongsu"]["cafe_store"] == [596, 956]
+    assert a["myeong"]["cafe_store"] == [323, 2373]
+    for x in a.values():
+        assert [r[0] for r in x["ind_store"]] == [r[0] for r in x["ind"]]  # ind와 같은 업종·같은 순서
+        assert sum(r[1] for r in x["ind_store"]) <= x["stores"]
+
+
+def test_industry_per_store_matches_engine():
+    # 계산 엔진 per_store(업종 필터)와 같은 값 — 대시보드 숫자와 펄이 숫자가 어긋나지 않게
+    from fastapi.testclient import TestClient
+    from calc_engine.main import app
+    client = TestClient(app)
+    a = areas("20262")
+    for area_id, region in [("seongsu", "성수"), ("hongdae", "홍대")]:
+        for name, n, per in a[area_id]["ind_store"][:3] + [["커피-음료", *a[area_id]["cafe_store"]]]:
+            res = client.post("/calculate", json={
+                "spec_version": "1.1", "request_id": "d-1", "dataset_id": "commercial_area_v1",
+                "metrics": [{"column": "est_sales", "op": "per_store"}],
+                "filters": [{"column": "region", "op": "eq", "value": region},
+                            {"column": "industry", "op": "eq", "value": name}],
+                "period": {"start": "2026-04", "end": "2026-06"}}).json()
+            assert round(res["results"][0]["values"]["est_sales.per_store"] / 1e4) == per, (region, name)
+
+
 def test_cautions():
     a = areas("20262")
     assert any("4개 묶음" in c for c in a["seongsu"]["cautions"])
