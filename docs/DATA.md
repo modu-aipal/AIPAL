@@ -20,6 +20,8 @@
 | `calc_engine/data/answer_key.md` | 정답표 Q1~Q11. pandas와 파이썬 기본 csv로 따로 계산해 일치한 값만 기록. Q1~Q10은 2025Q4 기준, Q11은 2026Q2(사이트 대조) |
 | `calc_engine/data/stores_areas.csv` | 점포 데이터에서 20곳(23개 동)만 남긴 것. **46,445행**(처음 5곳은 16,308행 그대로), 2021Q1~2026Q2, UTF-8. 매출 데이터의 업종 62개를 모두 포함(점포는 100개 업종) |
 | `calc_engine/scripts/build_store_dataset.py` | 점포 원본 → `stores_areas.csv`. 컬럼 이름을 일반_점포_수·전체_점포_수로 통일 |
+| `calc_engine/data/dong_rank.csv` | 23개 동의 분기별 **서울 전체 행정동(약 425개) 매출 순위**. 원본에서 계산 (대시보드 `rank`와 같은 정의) |
+| `calc_engine/data/dashboard_data.json` | **대시보드용 20곳 데이터**. 기존 대시보드 `AREAS`와 같은 키·단위(2025Q4 기준으로 만들면 20곳 × 14개 항목 전부 일치) + 새 항목(점포 수, 점포당 월평균, 객단가, 개업·폐업률, 프랜차이즈 비율, 주의 문구). 기준 분기 2026Q2, 최근 8개 분기. `build_dashboard_data.py`로 생성 |
 | `calc_engine/scripts/build_dataset.py` | 원본 CSV 여러 개 → `sales_areas.csv`. 파일끼리 겹치는 행은 숫자가 모두 같은지 확인하고 앞 파일(공식 파일)을 씀 |
 | `calc_engine/scripts/answer_key.py` | 정답표 다시 계산 |
 

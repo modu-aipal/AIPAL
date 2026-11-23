@@ -19,9 +19,16 @@ ROOT = Path(__file__).resolve().parent.parent
 KEY = ["기준_년분기_코드", "행정동_코드", "서비스_업종_코드"]
 region_map = pd.read_csv(ROOT / "data" / "region_map.csv", dtype=str)
 
-frames = []
+frames, ranks = [], {}
 for order, path in enumerate(sys.argv[1:]):
     df = pd.read_csv(path, encoding="cp949", dtype={"기준_년분기_코드": str, "행정동_코드": str})
+    # 서울 전체 행정동 매출 순위 (대시보드 rank와 같은 정의). 같은 분기가 여러 파일에 있으면 앞 파일 값을 씀
+    for q, g in df.groupby("기준_년분기_코드"):
+        if q in ranks:
+            continue
+        tot = g.groupby("행정동_코드")["당월_매출_금액"].sum()
+        rk = tot.rank(ascending=False, method="min").astype(int)
+        ranks[q] = [(q, c, int(rk[c]), len(tot)) for c in region_map["행정동_코드"] if c in rk.index]
     df = df[df["행정동_코드"].isin(region_map["행정동_코드"])].copy()
     df["_order"] = order
     frames.append(df)
@@ -48,4 +55,8 @@ if missing:
     sys.exit(f"원본에 없는 행정동 코드: {missing}")
 
 out.to_csv(ROOT / "data" / "sales_areas.csv", index=False, encoding="utf-8-sig")
+rank_rows = [r for q in sorted(ranks) for r in ranks[q]]
+pd.DataFrame(rank_rows, columns=["기준_년분기_코드", "행정동_코드", "서울_매출_순위", "서울_행정동_수"]).to_csv(
+    ROOT / "data" / "dong_rank.csv", index=False, encoding="utf-8-sig")
+print(f"서울 행정동 매출 순위 {len(rank_rows)}행 저장 (data/dong_rank.csv)")
 print(f"{len(out)}행 저장, 분기 {out['기준_년분기_코드'].min()}~{out['기준_년분기_코드'].max()}")
