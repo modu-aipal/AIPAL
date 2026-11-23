@@ -6,6 +6,7 @@ STOCK_COLUMNS = {"store_count", "general_store_count", "franchise_count"}
 MAX_METRICS = 3
 
 GROWTH_WORDS = ("증가", "증감", "감소", "성장", "상승", "하락")
+PER_STORE_WORDS = ("점포당", "가게당", "매장당", "한 곳당", "한곳당", "점포 한 곳", "가게 한 곳")
 RATIO_WORDS = ("비중", "비율", "퍼센트", "개업률", "폐업률")
 
 
@@ -29,9 +30,9 @@ def infer_metrics(q: str, cols: set[str]) -> list[MetricSpec]:
         sales = "male_sales"
     elif "여성" in q:
         sales = "female_sales"
-    elif "매출" in q or "점포당" in q:
+    elif "매출" in q or any(w in q for w in PER_STORE_WORDS):
         sales = "est_sales"
-    per_store = "점포당" in q
+    per_store = any(w in q for w in PER_STORE_WORDS)
     if per_store:
         add(sales or "est_sales", "per_store")
     elif sales:

@@ -495,7 +495,7 @@
     {
       "id": 37,
       "tag": "blocked",
-      "q": "성수에서 카페 차리면 괜찮을까?",
+      "q": "성수 카페 성공 확률은?",
       "expect": {
         "status": "needs_clarification",
         "reason_contains": "지원하지 않습니다"
@@ -795,6 +795,40 @@
       "q": "데이터 출처가 어디야?",
       "expect": {
         "status": "info"
+      }
+    },
+    {
+      "id": 65,
+      "tag": "startup",
+      "q": "성수에서 카페 차리면 괜찮을까?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "store_count.avg",
+        "metrics_include": [
+          "est_sales.per_store",
+          "est_sales.sum"
+        ]
+      }
+    },
+    {
+      "id": 66,
+      "tag": "per-store",
+      "q": "성수 카페 한 곳당 매출은?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.per_store"
       }
     }
   ]
