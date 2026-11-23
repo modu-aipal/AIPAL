@@ -262,14 +262,6 @@ def _plan(**kw):
     return AnalysisPlan.model_validate(base)
 
 
-def test_ranking_rows_sorted_by_value():
-    res = _result([("성수", 3e10), ("홍대", 9e10), ("강남", 5e10)])
-    rows = explain._ordered(_plan(rank_order="desc"), res)
-    assert [r.group["region"] for r in rows] == ["홍대", "강남", "성수"]
-    rows = explain._ordered(_plan(rank_order="asc"), res)
-    assert [r.group["region"] for r in rows] == ["성수", "강남", "홍대"]
-    facts = explain.build_facts(_plan(rank_order="desc"), res)
-    assert facts[-3].startswith("[홍대]") and "값이 큰 순서" in "\n".join(facts)
 
 
 def test_ranking_allows_sort_words_but_not_recommendation():
@@ -405,16 +397,6 @@ def test_malformed_model_output_is_still_a_clear_error(monkeypatch):
     assert client.post("/api/plan", json={"question": "성수 매출"}).status_code == 502
 
 
-def test_explanation_timeout_falls_back_to_template(monkeypatch):
-    async def fake(message, **kw):
-        if kw.get("format") is not None:
-            return "m", json.dumps({"status": "ok", "intent": "other"})
-        raise ollama_mod.OllamaTimeoutError("느림")
-
-    monkeypatch.setattr(planner.ollama, "chat", fake)
-    monkeypatch.setattr(explain.ollama, "chat", fake)
-    r = client.post("/api/dashboard/analyze", json={"question": "강남 매출 알려줘"})
-    assert r.status_code == 200 and "계산 결과:" in r.json()["text"]  # 오류 대신 결정적 문장
 
 
 def test_ollama_chat_sends_limits_and_detects_runaway():
@@ -438,3 +420,148 @@ def test_dong_count_line_is_compact_for_many_regions():
         r.notes = ["region_dong_count: 4" if i == 0 else "region_dong_count: 1"]
     line = [x for x in explain.build_caveats(res) if "행정동 수" in x][0]
     assert "지역0 4개 (나머지는 1개)" in line and "지역3" not in line
+
+
+# ---------------------------------------------------------------- 정렬·상위 N (코드가 순위를 정한다)
+def test_ranking_rows_sorted_by_value_and_cut_to_top_n():
+    from app.services.ranking import rank
+
+    rows = [(f"업종{i}", float(v) * 1e10) for i, v in enumerate([3, 9, 5, 1, 7, 8, 2], 1)]
+    res = _result(rows)
+    view = rank(_plan(intent="ranking", sort_by="est_sales.sum", rank_order="desc", top_n=3), res)
+    assert [r.group["region"] for r in view.rows] == ["업종2", "업종6", "업종5"] and view.total == 7 and view.ranked
+    low = rank(_plan(intent="ranking", sort_by="est_sales.sum", rank_order="asc", top_n=2), res)
+    assert [r.group["region"] for r in low.rows] == ["업종4", "업종7"]
+
+
+def test_growth_ranking_excludes_tiny_sales_and_missing_values():
+    from app.schemas.calc import CalcApplied, CalcMetric, CalcResult, CalcRow
+    from app.services.ranking import rank
+
+    def row(name, sales, growth):
+        return CalcRow(group={"industry": name}, values={"est_sales.sum": sales, "est_sales.growth_rate": growth},
+                       rows_used=1)
+
+    res = CalcResult(
+        request_id="r", status="ok", dataset_id="d", data_version="v", data_source="s", rows_used=9,
+        applied=CalcApplied(columns_used=["est_sales"], operations=[CalcMetric(column="est_sales", op="growth_rate"),
+                                                                    CalcMetric(column="est_sales", op="sum")],
+                            group_by=["industry"], filters=[]),
+        results=[row("큰업종A", 5e10, 0.10), row("큰업종B", 3e10, 0.30), row("아주작음", 2e6, 8.0),
+                 row("값없음", 4e10, None)],
+    )
+    plan = _plan(intent="industry_comparison", sort_by="est_sales.growth_rate", rank_order="desc", top_n=5,
+                 metrics=[{"column": "est_sales", "op": "growth_rate"}, {"column": "est_sales", "op": "sum"}],
+                 group_by=["industry"])
+    view = rank(plan, res)
+    assert [r.group["industry"] for r in view.rows] == ["큰업종B", "큰업종A"]  # 800%인 아주작음은 제외
+    assert any("1억 원 이상" in n for n in view.notes) and any("계산할 수 없는" in n for n in view.notes)
+
+
+def test_trio_for_overall_idiom_and_headline_lines():
+    import asyncio
+
+    from app.services.calc.mock import MockCalculator
+    from app.services.compose import compose_block
+    from app.services.ranking import rank
+
+    p = plan_of("가산동에서 잘나가는 업종")
+    assert [f"{m.column}.{m.op}" for m in p.metrics] == ["est_sales.sum", "est_sales.growth_rate", "est_sales.per_store"]
+    assert p.sort_by == "est_sales.sum" and p.top_n == 5 and p.rank_order == "desc" and p.concept == "overall"
+    res = asyncio.run(MockCalculator().calculate(build_request(p, "ds", "rid")))
+    view = rank(p, res)
+    head, lines = compose_block(p, res, view)
+    assert "가산동의 업종 중 매출 규모 상위 5개 업종입니다" in head and "전체 7개 중" in head
+    assert len(lines) == 5 and [l.split(".")[0] for l in lines] == ["1", "2", "3", "4", "5"]
+    assert all("매출 " in l and "점포당 월 " in l for l in lines)
+
+
+# ---------------------------------------------------------------- 의미 해석: 개념 · 방향 · 개수
+def test_growth_idiom_sorts_by_growth():
+    p = plan_of("강남 요즘 뜨는 업종")
+    assert p.sort_by == "est_sales.growth_rate" and p.metrics[0].op == "growth_rate" and p.top_n == 5
+
+
+def test_low_direction_idiom_sorts_ascending():
+    assert plan_of("독산 요즘 장사 안 되는 업종").rank_order == "asc"
+    assert plan_of("매출 하위 3곳").rank_order == "asc"
+
+
+def test_top_n_is_parsed():
+    assert plan_of("장사 잘되는 곳 TOP 3").top_n == 3
+    assert plan_of("홍대에서 매출 제일 큰 업종 3개").top_n == 3
+    assert plan_of("압구정 업종 순위 알려줘").top_n == 5  # 말하지 않으면 5개
+
+
+def test_model_understands_idiom_the_code_does_not_know():
+    d = PlanDraft(status="ok", intent="industry_comparison", concept="growth")
+    p = plan_of("떡상한 업종 알려줘", d)
+    assert p.sort_by == "est_sales.growth_rate" and p.concept == "growth"
+    assert plan_of("떡상한 업종 알려줘").concept is None  # 모델이 없으면 규모 순(기본)
+
+
+def test_model_can_say_closures_and_openings():
+    p = plan_of("문 닫는 가게가 많은 동네", PlanDraft(status="ok", intent="other", concept="closures"))
+    assert p.intent == "ranking" and p.sort_by == "close_count.sum" and p.rank_order == "desc"
+    p = plan_of("새로 문 연 가게가 많은 곳", PlanDraft(status="ok", intent="other", concept="openings"))
+    assert p.sort_by == "open_count.sum"
+
+
+def test_clear_words_beat_a_wrong_model_direction():
+    d = PlanDraft(status="ok", intent="ranking", direction="low")
+    assert plan_of("폐업이 많은 동네는?", d).rank_order == "desc"
+
+
+def test_concept_priority_setting(monkeypatch):
+    from app.core.config import get_settings
+
+    d = PlanDraft(status="ok", intent="ranking", concept="size")
+    assert plan_of("요즘 뜨는 상권은?", d).sort_by == "est_sales.sum"  # model_first: 모델 의견
+    monkeypatch.setenv("CONCEPT_PRIORITY", "rules_first")
+    get_settings.cache_clear()
+    assert plan_of("요즘 뜨는 상권은?", d).sort_by == "est_sales.growth_rate"  # 알려진 표현 우선
+
+
+def test_explicit_growth_word_beats_model_concept():
+    d = PlanDraft(status="ok", intent="ranking", concept="size")
+    assert plan_of("최근 1년 가장 많이 성장한 상권", d).sort_by == "est_sales.growth_rate"
+
+
+def test_unavailable_terms_are_reported_without_the_model():
+    r = ev("성수 월세 알려줘")
+    assert r.status == "needs_clarification" and r.missing_columns == ["월세"] and r.suggested_questions
+
+
+def test_false_negation_words():
+    assert explain.false_negations("잘나가는 업종은 없습니다", True) == ["없습니다"]
+    assert explain.false_negations("잘나가는 업종은 없습니다", False) == []
+
+
+def test_idiom_question_answer_blocks_and_wrong_negation_rejected(monkeypatch):
+    async def fake(message, **kw):
+        if kw.get("format") is not None:
+            return "m", json.dumps({"status": "ok", "intent": "other"})
+        return "m", "가산동에서 잘나가는 업종은 없습니다."  # 틀린 부정: 거부되어야 함
+
+    monkeypatch.setattr(planner.ollama, "chat", fake)
+    monkeypatch.setattr(explain.ollama, "chat", fake)
+    r = client.post("/api/dashboard/analyze", json={"question": "가산동에서 잘나가는 업종"})
+    text = r.json()["text"]
+    assert r.status_code == 200 and "없습니다" not in text
+    head, *rest = text.split("\n\n")[0].split("\n")
+    assert "상위 5개 업종" in head and len(rest) == 5
+    assert "※ 기준:" in text
+
+
+def test_explanation_timeout_keeps_structure(monkeypatch):
+    async def fake(message, **kw):
+        if kw.get("format") is not None:
+            return "m", json.dumps({"status": "ok", "intent": "other"})
+        raise ollama_mod.OllamaTimeoutError("느림")
+
+    monkeypatch.setattr(planner.ollama, "chat", fake)
+    monkeypatch.setattr(explain.ollama, "chat", fake)
+    r = client.post("/api/dashboard/analyze", json={"question": "성수와 홍대의 카페 매출을 비교해줘"})
+    text = r.json()["text"]
+    assert r.status_code == 200 and text.split("\n\n")[0].count("• ") == 2  # 해석만 빠지고 결론·목록은 나간다
+    assert "※ 기준:" in text

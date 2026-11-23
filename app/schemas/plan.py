@@ -45,9 +45,18 @@ class PeriodSpec(BaseModel):
     end: str | None = Field(None, description="YYYY-MM")
 
 
+# 사용자가 말한 '잘나간다/뜬다' 같은 관용 표현이 가리키는 개념. 코드가 이것을 데이터의 지표로 바꾼다.
+#  overall=잘나가는·장사 잘되는·인기·돈 되는(규모+증가+점포당을 함께 본다), size=매출 규모, growth=뜨는·성장·증가,
+#  efficiency=점포당·한 달에 얼마나 버는, count=점포 몇 개
+Concept = Literal["overall", "size", "growth", "efficiency", "count", "closures", "openings", "none"]
+
+
 class PlanDraft(BaseModel):
     status: Literal["ok", "needs_clarification"]
     intent: Intent = Field("other", description="분석 목적. 분류 불가/추천/순위 요청은 other")
+    concept: Concept = Field("none", description="'잘나가는·뜨는·점포 몇 개' 같은 표현이 가리키는 개념")
+    direction: Literal["high", "low"] = Field("high", description="높은/많은=high, 낮은/안 되는/하위=low")
+    top_n: int | None = Field(None, ge=1, le=20, description="'TOP 3', '상위 5개'처럼 말한 개수")
     regions: list[Region] = []
     industries: list[str] = []
     metrics: list[MetricSpec] = []
@@ -76,7 +85,10 @@ class AnalysisPlan(BaseModel):
     period: PeriodSpec | None
     time_column: str | None = None
     assumptions: list[str] = Field([], description="질문에 없어서 기본값으로 가정한 것 (답변에 밝힌다)")
-    rank_order: Literal["desc", "asc"] | None = Field(None, description="ranking 정렬 방향")
+    rank_order: Literal["desc", "asc"] | None = Field(None, description="여러 행을 정렬하는 방향")
+    top_n: int | None = Field(None, description="순위·업종 비교에서 보여 줄 개수 (None이면 전부)")
+    sort_by: str | None = Field(None, description="정렬 기준 지표 키 '<컬럼>.<연산>' (예: est_sales.growth_rate)")
+    concept: str | None = Field(None, description="해석한 개념 (overall/size/growth/efficiency/count)")
 
 
 class PlanResponse(BaseModel):

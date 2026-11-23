@@ -22,7 +22,7 @@ from app.services import ollama
 from app.services.areas import AreaMatch, find_areas
 from app.services.dataset import INDUSTRY_ALIASES, REGIONS, default_dataset
 from app.services.latest import latest_quarter
-from app.services.metrics import RATIO_WORDS, STOCK_COLUMNS, apply_growth, infer_metrics, is_sales_column, normalize_op
+from app.services.metrics import RATIO_WORDS, STOCK_COLUMNS, build_metrics, infer_metrics, is_sales_column, normalize_op
 from app.services.periods import (
     Quarter,
     default_period,
@@ -30,6 +30,7 @@ from app.services.periods import (
     quarter_aligned,
     relative_period,
 )
+from app.services.understand import has_place_noun, parse_top_n, resolve_concept, resolve_direction
 from app.services.periods import explicit_period as _period_from_question  # noqa: F401 (테스트가 사용)
 from app.services.periods import quarter_aligned as _quarter_aligned  # noqa: F401 (테스트가 사용)
 
@@ -58,14 +59,24 @@ _LABEL = {
     "open_count": "개업 점포 수", "close_count": "폐업 점포 수",
 }
 
-_EXAMPLES = """[예시]
-"강남 매출 알려줘" → {"status":"ok","intent":"lookup","regions":["강남"],"metrics":[{"column":"est_sales","op":"sum"}]}
-"성수와 홍대의 카페 점포 수 비교해줘" → {"status":"ok","intent":"region_comparison","regions":["성수","홍대"],"industries":["카페"],"metrics":[{"column":"store_count","op":"avg"}]}
-"홍대 음식점 분기별 매출 추이" → {"status":"ok","intent":"sales_trend","regions":["홍대"],"industries":["음식점"],"metrics":[{"column":"est_sales","op":"sum"}]}
-"2024년 강남에서 매출이 증가한 업종은?" → {"status":"ok","intent":"industry_comparison","regions":["강남"],"metrics":[{"column":"est_sales","op":"growth_rate"}]}
-"가장 많이 성장한 상권은?" → {"status":"ok","intent":"ranking","metrics":[{"column":"est_sales","op":"growth_rate"}]}
-"이태원 점포당 매출은?" → {"status":"ok","intent":"lookup","regions":["이태원"],"metrics":[{"column":"est_sales","op":"per_store"}]}
-"성수에서 카페 차리면 괜찮을까?" → {"status":"ok","intent":"other"}"""
+_EXAMPLES = """[예시] (concept: overall=잘나가는·장사 잘되는·인기·돈 되는 / growth=뜨는·핫한·성장·많이 오른 / size=매출 규모 / efficiency=점포당·한 달에 얼마 버는 / count=점포 몇 개 / closures=폐업·가게 접는 / openings=개업·새로 여는)
+"강남 매출 알려줘" → {"status":"ok","intent":"lookup","regions":["강남"]}
+"성수 요즘 장사 어때?" → {"status":"ok","intent":"lookup","concept":"overall","regions":["성수"]}
+"홍대는 한 달에 얼마나 벌어?" → {"status":"ok","intent":"lookup","concept":"efficiency","regions":["홍대"]}
+"영등포 편의점 몇 개야" → {"status":"ok","intent":"lookup","concept":"count","regions":["영등포동"],"industries":["편의점"]}
+"가산동에서 잘나가는 업종" → {"status":"ok","intent":"industry_comparison","concept":"overall","regions":["가산동"]}
+"독산 요즘 장사 안 되는 업종" → {"status":"ok","intent":"industry_comparison","concept":"overall","direction":"low","regions":["독산1동"]}
+"요즘 뜨는 상권은?" → {"status":"ok","intent":"ranking","concept":"growth"}
+"장사 잘되는 곳 TOP 3" → {"status":"ok","intent":"ranking","concept":"overall","top_n":3}
+"성수와 홍대 중 어디가 더 잘돼?" → {"status":"ok","intent":"region_comparison","concept":"overall","regions":["성수","홍대"]}
+"홍대 카페 분기별 매출 변화" → {"status":"ok","intent":"sales_trend","regions":["홍대"],"industries":["카페"]}
+"명동 매출 얼마나 돼?" → {"status":"ok","intent":"lookup","regions":["명동"]}
+"성수랑 홍대 중에 어디가 더 커?" → {"status":"ok","intent":"region_comparison","concept":"size","regions":["성수","홍대"]}
+"작년보다 많이 오른 곳은?" → {"status":"ok","intent":"ranking","concept":"growth"}
+"가게 접는 곳이 많은 동네" → {"status":"ok","intent":"ranking","concept":"closures"}
+"요즘 새로 여는 가게가 늘어난 곳" → {"status":"ok","intent":"ranking","concept":"openings"}
+"성수에서 카페 차리면 괜찮을까?" → {"status":"ok","intent":"other"}
+"성수 유동인구 알려줘" → {"status":"needs_clarification","missing_fields":["유동인구"]}"""
 
 
 def build_system_prompt(ds: DatasetMeta) -> str:
@@ -83,6 +94,9 @@ def build_system_prompt(ds: DatasetMeta) -> str:
         "[규칙]\n"
         "- intent: lookup(지역 하나의 값) · region_comparison(지역 2곳 이상 비교) · industry_comparison(업종별 비교) · "
         "sales_trend(분기별 추이) · ranking(전체 지역 중 가장 높은·성장한 곳) · other(분류 불가, 추천·창업 판단).\n"
+        "- concept: 사람이 돌려 말한 표현이 뜻하는 것을 고른다(위 예시 참고). 그 뜻이 분명할 때만 고르고, '얼마야·어느 정도·더 커'처럼 값이나 크기만 묻는 질문은 none 또는 size다. direction: 낮은·안 되는·하위면 low.\n"
+        "- 표현을 잘 모르겠으면 needs_clarification을 쓰지 말고 가장 가까운 concept을 고른다. needs_clarification은 데이터에 없는 항목(유동인구·임대료 등)에만 쓴다.\n"
+        "- top_n: 'TOP 3', '상위 5개'처럼 개수를 말했을 때만.\n"
         "- regions·industries에는 질문에 나온 것만 넣는다. 없으면 비운다. ranking은 regions를 비운다.\n"
         "- 연산: sum, avg(분기당 평균), growth_rate(증감률), per_store(점포당 월평균, *_sales 컬럼에만). 점포 수 계열은 avg.\n"
         "- 기간은 질문에 나온 것만, 분기 경계의 YYYY-MM으로. 없으면 period는 null (서버가 기본값을 정한다).\n"
@@ -191,11 +205,13 @@ _COND_LABEL = {
     "analysis_type": "분석 유형(지역 값 조회 / 지역 비교 / 업종 비교 / 분기별 추이 / 상권 순위)",
 }
 _KNOWN_INTENTS = {"lookup", "region_comparison", "industry_comparison", "sales_trend", "ranking"}
+_UNAVAILABLE = ("유동인구", "생활인구", "거주인구", "임대료", "월세", "권리금", "보증금", "인건비", "순이익", "순수익",
+                "영업이익", "수익률", "마진")  # 이 데이터에 없는 항목
 _CIRCLED = "①②③④⑤"
 _NULL_DRAFT = PlanDraft(status="ok", intent="other")  # 모델이 아무것도 못 알아들은 최악의 경우
 
 
-def _infer_intent(q: str, n_areas: int, asks_industry: bool) -> str:
+def _infer_intent(q: str, n_areas: int, asks_industry: bool, rank_cue: bool = False) -> str:
     """명시적 단어로만 보수적으로 유형을 정한다. 못 정하면 other."""
     if any(w in q for w in _TREND_WORDS):
         return "sales_trend"
@@ -203,7 +219,7 @@ def _infer_intent(q: str, n_areas: int, asks_industry: bool) -> str:
         return "industry_comparison"
     if n_areas >= 2:
         return "region_comparison"
-    if n_areas == 0 and (any(w in q for w in _RANK_WORDS) or "비교" in q):
+    if n_areas == 0 and (rank_cue or "비교" in q):
         return "ranking"
     if n_areas == 1:
         return "region_comparison" if "비교" in q else "lookup"
@@ -348,6 +364,10 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         opts = am.ambiguous[0]
         return clarify("ambiguous", ["region"], reason=f"'{opts[0][:-2]}'은(는) {' · '.join(opts)} 두 곳입니다. 어느 쪽인가요?",
                        extra={"options": opts})
+    missing_terms = [w for w in _UNAVAILABLE if w in question]
+    if missing_terms:
+        return clarify("columns", [], missing_terms,
+                       reason="이 데이터(카드 추정매출·점포)에는 없는 항목입니다. 아래 질문으로 대신 확인할 수 있습니다.")
     if unknown_ind:
         return clarify("industry", ["industry"], reason=(
             f"업종 '{', '.join(unknown_ind)}'은(는) 데이터셋에 없습니다. 사용 가능한 업종: {', '.join(ind_col.allowed_values or [])}."))
@@ -358,11 +378,17 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
 
     # --- 질문 유형: 코드가 명시적 단어로 정하고, 못 정하면 모델의 분류를 쓴다 ---
     asks_industry = ind_col is not None and "업종" in question and not inds
-    intent = _infer_intent(question, len(areas), asks_industry)
+    # 의미 해석: 개념(잘나가는/뜨는/…)·방향·개수. 모델이 이해한 값과 코드의 알려진 표현을 합친다.
+    concept = resolve_concept(question, draft.concept, get_settings().concept_priority)
+    direction = resolve_direction(question, draft.direction)
+    top_n = parse_top_n(question, draft.top_n)
+    rank_cue = (any(w in question for w in _RANK_WORDS) or top_n is not None
+                or (concept in ("overall", "growth") and has_place_noun(question)))
+    intent = _infer_intent(question, len(areas), asks_industry, rank_cue)
     if intent == "other" and draft.intent in _KNOWN_INTENTS:
         intent = draft.intent
     # 지표 표현("매출", "점포 수")은 있는데 지원 지역이 없다 -> 지원하지 않는 지역을 물은 것으로 보고 지역을 안내한다
-    if intent == "other" and region_col is not None and infer_metrics(question, set(cols)):
+    if intent == "other" and region_col is not None and (infer_metrics(question, set(cols)) or concept):
         intent = "lookup"
     if model_cols:  # 모델이 '데이터에 없는 항목'을 지적
         return clarify("columns", [], model_cols)
@@ -372,12 +398,15 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
 
     # --- 지표: 질문 속 표현이 우선, 없으면 모델 값, 그래도 없으면 추정매출 ---
     assumptions: list[str] = []
-    metrics = infer_metrics(question, set(cols)) or list(draft.metrics)
-    metrics = [normalize_op(m) for m in metrics]
-    if not metrics and "est_sales" in cols:
-        metrics = [MetricSpec(column="est_sales", op="sum")]
+    explicit = infer_metrics(question, set(cols))
+    model_metrics = [normalize_op(m) for m in draft.metrics]
+    bad = [v for v in validate_draft(PlanDraft(status="ok", metrics=model_metrics), ds)
+           if v != "metrics가 비어 있습니다"]  # 모델이 만든 없는 컬럼·잘못된 연산은 숨기지 않고 알린다
+    if bad:
+        raise PlanValidationError(bad)
+    if not explicit and not model_metrics and concept is None and "est_sales" in cols:
         assumptions.append("지표: 추정매출")
-    metrics = apply_growth(metrics, question)
+    metrics, sort_key = build_metrics(intent, concept, explicit, model_metrics, set(cols))
     metrics = list({(m.column, m.op): m for m in metrics}.values())
 
     # --- 유형별 구조 ---
@@ -453,8 +482,12 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
     plan = AnalysisPlan(
         intent=intent, regions=regions, industries=inds, metrics=metrics, group_by=group_by,
         comparison=comparison, filters=filters, period=period, time_column=time_col,
-        assumptions=assumptions,
-        rank_order=("asc" if any(w in question for w in _ASC_WORDS) else "desc") if intent == "ranking" else None,
+        assumptions=assumptions, concept=concept,
+        # 여러 행을 정렬할 때만 방향·기준을 둔다. 순위·업종 비교는 상위 N개(기본 5)만 보여 준다.
+        rank_order=(("asc" if direction == "low" else "desc")
+                    if intent in ("ranking", "industry_comparison", "region_comparison") else None),
+        sort_by=sort_key if intent in ("ranking", "industry_comparison", "region_comparison") else None,
+        top_n=(top_n or 5) if intent in ("ranking", "industry_comparison") else None,
     )
     return PlanResponse(status="ok", plan=plan, model=model, elapsed_ms=0)
 
