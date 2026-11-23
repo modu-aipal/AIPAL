@@ -52,10 +52,17 @@ http://localhost:8765 (API 없이도 동작한다)
 
 지도 오른쪽 아래에 떠 있는 로봇 **펄이**를 누르면 질문 말풍선이 나오고, 고르면 대화 창이 열려 답한다. 대화 창에 직접 입력한 질문은 `POST {API}/api/dashboard/analyze` 로 보낸다 (`docs/DASHBOARD_API.md`).
 
-API 주소: 기본값은 `start.ps1` 의 ngrok 주소 (`https://bullion-predefine-phony.ngrok-free.dev`). 그 PC에서 `start.ps1` 이 실행 중이면 그냥 열어도 연결된다. 다른 주소를 쓰려면:
+API 주소: `index.html` 의 `<meta name="aipal-api" content="self">` — 페이지와 같은 주소로 보낸다. B는 API 키(`X-API-Key`)를 요구하므로, Vercel 서버 함수가 키를 붙여 B로 전달한다 (키는 브라우저로 내려가지 않는다).
 
-1. 주소창: `http://localhost:8765/?api=http://127.0.0.1:8000` (이 브라우저에 기억됨, `?api=` 로 기본값으로 되돌림, `?api=off` 로 API 끔)
-2. `index.html` 의 `<meta name="aipal-api" content="">` 에 주소 입력
+- `api/dashboard/analyze.js`: `POST /api/dashboard/analyze` → 키를 붙여 B로 전달 (B `docs/b-role/a-proxy/` 예시 그대로)
+- `api/health.js` + `vercel.json` 의 rewrite: `GET /health` → B `/health` (키 불필요)
+- Vercel → Project Settings → Environment Variables (Production·Preview): `B_API_URL` = B ngrok 주소(끝 `/` 없이), `B_API_KEY` = B가 전달한 키. 바꾼 뒤 재배포해야 적용된다
+- `vercel.json`: 함수 최대 실행 150초 (대시보드 대기 시간과 같음)
+
+다른 주소를 쓰려면:
+
+1. 주소창: `http://localhost:8765/?api=http://127.0.0.1:8000` (이 브라우저에 기억됨, `?api=` 로 기본값으로 되돌림, `?api=off` 로 API 끔). 로컬 `http.server` 에는 서버 함수가 없으므로 로컬에서 B를 쓰려면 이 방법을 쓴다
+2. `<meta name="aipal-api">` 를 비우면 `start.ps1` 의 ngrok 주소(`https://bullion-predefine-phony.ngrok-free.dev`)로 직접 보낸다 (B가 키를 요구하면 401)
 
 | API 응답 | 대시보드 동작 |
 |---|---|
@@ -73,7 +80,7 @@ API 주소: 기본값은 `start.ps1` 의 ngrok 주소 (`https://bullion-predefin
 - `CORS_ORIGINS` 에 대시보드 주소 추가: 예) `http://localhost:8765,https://<vercel 주소>`
 - `X-Is-Mock` 헤더를 브라우저가 읽으려면 `CORSMiddleware(..., expose_headers=["X-Is-Mock","X-Data-Source"])` 필요 (없어도 `text` 접두어로 Mock 표시는 됨)
 - ngrok 무료 주소는 브라우저 경고 페이지가 끼므로 대시보드가 `ngrok-skip-browser-warning` 헤더를 보낸다
-- `API_KEY` 는 이 페이지에 넣지 않는다. 공개 배포에서 키가 필요하면 Vercel 함수 같은 서버 쪽 프록시가 키를 붙여야 한다
+- `API_KEY` 는 이 페이지에 넣지 않는다. 키는 Vercel 환경변수 `B_API_KEY` 에만 있고 `api/dashboard/analyze.js` 가 붙인다
 
 ## 로봇 펄이 (3D)
 

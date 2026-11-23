@@ -2,9 +2,10 @@
 <html lang="ko">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<!-- B 분석 API 주소. 비워 두면 start.ps1 의 ngrok 주소를 쓴다. 페이지 주소의 ?api=https://… 가 우선 (이 브라우저에 기억됨, ?api=off 로 끔).
-     API 키는 여기에 넣지 않는다 (공개 저장소·공개 페이지). -->
-<meta name="aipal-api" content="">
+<!-- B 분석 API 주소. self = 이 페이지와 같은 주소: Vercel 서버 함수(dashboard/api/)가 키를 붙여 B로 전달한다.
+     비워 두면 start.ps1 의 ngrok 주소로 직접 보낸다. 페이지 주소의 ?api=https://… 가 우선 (이 브라우저에 기억됨, ?api=off 로 끔).
+     API 키는 여기에 넣지 않는다 (공개 저장소·공개 페이지). 키는 Vercel 환경변수 B_API_KEY 에만 둔다. -->
+<meta name="aipal-api" content="self">
 <!-- PWA: 홈 화면에 추가하면 앱처럼 열리고, 한 번 열어 둔 뒤에는 오프라인에서도 지도와 내장 데이터가 보인다 -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0a0d12">
@@ -1277,13 +1278,14 @@ function ask(q,res,instant,same){
   steps.forEach((s,i)=>askTimer.push(setTimeout(()=>{s.classList.add('on');if(i===1)document.getElementById('sql').textContent=res.sql;if(i===3)fin()},250+i*380)));
 }
 /* team AI analysis API (repo: app/api/routes/dashboard.py). Order: ?api=… (remembered in this browser; ?api= clears it,
-   ?api=off turns the API off), then <meta name="aipal-api">, then the team's ngrok address from start.ps1.
+   ?api=off turns the API off), then <meta name="aipal-api"> ("self" = this page's own origin, where the Vercel
+   function dashboard/api/ adds the B key server-side), then the team's ngrok address from start.ps1.
    No key is kept in this page. Typed questions go to the API; the preset buttons and any failure fall back to the
    answers computed from this page's own data, labelled as such. */
 const DEFAULT_API='https://bullion-predefine-phony.ngrok-free.dev';
 const API_BASE=(()=>{let u='';try{const q=new URLSearchParams(location.search).get('api');if(q!==null)localStorage.setItem('aipalApi',q);u=q!==null?q:(localStorage.getItem('aipalApi')||'')}catch(e){}
   if(!u){const m=document.querySelector('meta[name="aipal-api"]');u=m?m.content:''}
-  u=(u||DEFAULT_API).trim();return u==='off'?'':u.replace(/\/+$/,'')})();
+  u=(u||DEFAULT_API).trim();if(u==='self')u=location.origin;return u==='off'?'':u.replace(/\/+$/,'')})();
 const API_AREA={geondae:'kondae'};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const API_H={'ngrok-skip-browser-warning':'1'};
