@@ -1,57 +1,801 @@
 {
   "_comment": "질문 해석 평가 세트. expect 키: status(ok|needs_clarification), reason_contains, intent, regions, industries, primary(정렬/대표 지표 col.op), metrics_include, top_n, order(asc|desc), period(last4|last1|{start,end}). 적힌 키만 채점한다. 관용 표현(idiom)은 사람이 말하는 그대로 적었다.",
   "cases": [
-    {"id": 1, "tag": "lookup", "q": "강남 매출 알려줘", "expect": {"intent": "lookup", "regions": ["강남"], "primary": "est_sales.sum"}},
-    {"id": 2, "tag": "idiom-overall", "q": "성수 요즘 장사 어때?", "expect": {"intent": "lookup", "regions": ["성수"], "primary": "est_sales.sum", "metrics_include": ["est_sales.growth_rate", "est_sales.per_store"], "period": "last4"}},
-    {"id": 3, "tag": "idiom-efficiency", "q": "홍대는 한 달에 얼마나 벌어?", "expect": {"intent": "lookup", "regions": ["홍대"], "primary": "est_sales.per_store"}},
-    {"id": 4, "tag": "idiom-count", "q": "이태원에 점포 몇 개야?", "expect": {"intent": "lookup", "regions": ["이태원"], "primary": "store_count.avg"}},
-    {"id": 5, "tag": "idiom-count", "q": "명동에 가게 몇 개 있어?", "expect": {"intent": "lookup", "regions": ["명동"], "primary": "store_count.avg"}},
-    {"id": 6, "tag": "idiom-overall", "q": "건대 카페 잘돼?", "expect": {"intent": "lookup", "regions": ["건대"], "industries": ["카페"], "primary": "est_sales.sum", "metrics_include": ["est_sales.growth_rate", "est_sales.per_store"]}},
-    {"id": 7, "tag": "lookup", "q": "압구정 매출 규모 알려줘", "expect": {"intent": "lookup", "regions": ["압구정동"], "primary": "est_sales.sum"}},
-    {"id": 8, "tag": "ranking", "q": "매출이 제일 높은 동네는?", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.sum", "order": "desc", "top_n": 5}},
-    {"id": 9, "tag": "idiom-growth", "q": "어디가 제일 핫해?", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.growth_rate", "order": "desc", "top_n": 5}},
-    {"id": 10, "tag": "idiom-growth", "q": "요즘 뜨는 상권은?", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.growth_rate", "order": "desc", "top_n": 5, "period": "last4"}},
-    {"id": 11, "tag": "ranking", "q": "최근 1년 가장 많이 성장한 상권", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.growth_rate", "order": "desc", "top_n": 5}},
-    {"id": 12, "tag": "idiom-overall", "q": "장사 잘되는 곳 TOP 3", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.sum", "order": "desc", "top_n": 3}},
-    {"id": 13, "tag": "ranking", "q": "매출 하위 3곳", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.sum", "order": "asc", "top_n": 3}},
-    {"id": 14, "tag": "ranking", "q": "점포가 제일 많은 상권", "expect": {"intent": "ranking", "regions": [], "primary": "store_count.avg", "order": "desc", "top_n": 5}},
-    {"id": 15, "tag": "ranking", "q": "폐업이 많은 동네는?", "expect": {"intent": "ranking", "regions": [], "primary": "close_count.sum", "order": "desc", "top_n": 5}},
-    {"id": 16, "tag": "idiom-overall", "q": "카페가 잘 되는 상권은?", "expect": {"intent": "ranking", "regions": [], "industries": ["카페"], "primary": "est_sales.sum", "order": "desc", "top_n": 5}},
-    {"id": 17, "tag": "ranking", "q": "점포당 매출이 높은 곳", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.per_store", "order": "desc", "top_n": 5}},
-    {"id": 18, "tag": "industry-idiom", "q": "가산동에서 잘나가는 업종", "expect": {"intent": "industry_comparison", "regions": ["가산동"], "primary": "est_sales.sum", "metrics_include": ["est_sales.growth_rate", "est_sales.per_store"], "order": "desc", "top_n": 5, "period": "last4"}},
-    {"id": 19, "tag": "industry-idiom", "q": "제기동에서 잘나가는 업종", "expect": {"intent": "industry_comparison", "regions": ["제기동"], "primary": "est_sales.sum", "order": "desc", "top_n": 5}},
-    {"id": 20, "tag": "industry-idiom", "q": "성수에서 인기 있는 업종은?", "expect": {"intent": "industry_comparison", "regions": ["성수"], "primary": "est_sales.sum", "order": "desc", "top_n": 5}},
-    {"id": 21, "tag": "industry-idiom", "q": "강남 요즘 뜨는 업종", "expect": {"intent": "industry_comparison", "regions": ["강남"], "primary": "est_sales.growth_rate", "order": "desc", "top_n": 5}},
-    {"id": 22, "tag": "industry", "q": "홍대에서 매출 제일 큰 업종 3개", "expect": {"intent": "industry_comparison", "regions": ["홍대"], "primary": "est_sales.sum", "order": "desc", "top_n": 3}},
-    {"id": 23, "tag": "industry", "q": "이태원 업종별 매출 비교해줘", "expect": {"intent": "industry_comparison", "regions": ["이태원"], "primary": "est_sales.sum", "top_n": 5}},
-    {"id": 24, "tag": "industry", "q": "2024년 강남에서 매출이 증가한 업종", "expect": {"intent": "industry_comparison", "regions": ["강남"], "primary": "est_sales.growth_rate", "period": {"start": "2024-01", "end": "2024-12"}}},
-    {"id": 25, "tag": "industry-idiom", "q": "여의도에서 장사 잘되는 업종 알려줘", "expect": {"intent": "industry_comparison", "regions": ["여의동"], "primary": "est_sales.sum", "order": "desc", "top_n": 5}},
-    {"id": 26, "tag": "compare-idiom", "q": "성수와 홍대 중 어디가 더 잘돼?", "expect": {"intent": "region_comparison", "regions": ["성수", "홍대"], "primary": "est_sales.sum"}},
-    {"id": 27, "tag": "compare", "q": "성수 vs 홍대 카페 매출", "expect": {"intent": "region_comparison", "regions": ["성수", "홍대"], "industries": ["카페"], "primary": "est_sales.sum"}},
-    {"id": 28, "tag": "compare", "q": "건대랑 이태원 점포 수 비교", "expect": {"intent": "region_comparison", "regions": ["건대", "이태원"], "primary": "store_count.avg"}},
-    {"id": 29, "tag": "compare", "q": "강남 압구정 청담 중에 매출 높은 데는?", "expect": {"intent": "region_comparison", "regions": ["강남", "압구정동", "청담동"], "primary": "est_sales.sum"}},
-    {"id": 30, "tag": "trend", "q": "성수 매출 추이", "expect": {"intent": "sales_trend", "regions": ["성수"], "primary": "est_sales.sum"}},
-    {"id": 31, "tag": "trend", "q": "홍대 카페 분기별 매출 변화", "expect": {"intent": "sales_trend", "regions": ["홍대"], "industries": ["카페"], "primary": "est_sales.sum"}},
-    {"id": 32, "tag": "trend-idiom", "q": "논현 요즘 매출 흐름", "expect": {"intent": "sales_trend", "regions": ["논현1동"], "primary": "est_sales.sum", "period": "last4"}},
-    {"id": 33, "tag": "period", "q": "작년 성수 매출", "expect": {"intent": "lookup", "regions": ["성수"], "period": {"start": "2025-01", "end": "2025-12"}}},
-    {"id": 34, "tag": "period", "q": "올해 홍대 매출", "expect": {"intent": "lookup", "regions": ["홍대"], "period": {"start": "2026-01", "end": "2026-06"}}},
-    {"id": 35, "tag": "period", "q": "지난 분기 강남 매출", "expect": {"intent": "lookup", "regions": ["강남"], "period": "last1"}},
-    {"id": 36, "tag": "period", "q": "최근 2년 명동 매출 추이", "expect": {"intent": "sales_trend", "regions": ["명동"], "period": {"start": "2024-07", "end": "2026-06"}}},
-    {"id": 37, "tag": "blocked", "q": "성수에서 카페 차리면 괜찮을까?", "expect": {"status": "needs_clarification", "reason_contains": "지원하지 않습니다"}},
-    {"id": 38, "tag": "blocked", "q": "홍대 창업 추천해줘", "expect": {"status": "needs_clarification", "reason_contains": "지원하지 않습니다"}},
-    {"id": 39, "tag": "blocked", "q": "성수 월별 매출", "expect": {"status": "needs_clarification", "reason_contains": "월별"}},
-    {"id": 40, "tag": "blocked", "q": "잠실 매출 알려줘", "expect": {"status": "needs_clarification", "reason_contains": "지원하는 지역"}},
-    {"id": 41, "tag": "blocked", "q": "주말 매출 비중 높은 곳", "expect": {"status": "needs_clarification", "reason_contains": "비중"}},
-    {"id": 42, "tag": "blocked", "q": "노량진 매출", "expect": {"status": "needs_clarification", "reason_contains": "노량진1동"}},
-    {"id": 43, "tag": "blocked", "q": "분석 좀 해줘", "expect": {"status": "needs_clarification"}},
-    {"id": 44, "tag": "blocked", "q": "성수 유동인구 알려줘", "expect": {"status": "needs_clarification"}},
-    {"id": 45, "tag": "blocked", "q": "성수 서점 매출 알려줘", "expect": {"status": "needs_clarification"}},
-    {"id": 46, "tag": "idiom-overall", "q": "청담동 술집 장사 잘돼?", "expect": {"intent": "lookup", "regions": ["청담동"], "industries": ["주점"], "primary": "est_sales.sum", "metrics_include": ["est_sales.growth_rate", "est_sales.per_store"]}},
-    {"id": 47, "tag": "idiom-overall", "q": "신사동 미용 업종 인기 있어?", "expect": {"intent": "lookup", "regions": ["신사동"], "industries": ["미용"], "primary": "est_sales.sum"}},
-    {"id": 48, "tag": "idiom-efficiency", "q": "한강로 카페 점포당 월 매출", "expect": {"intent": "lookup", "regions": ["한강로동"], "industries": ["카페"], "primary": "est_sales.per_store"}},
-    {"id": 49, "tag": "idiom-count", "q": "영등포 편의점 몇 개야", "expect": {"intent": "lookup", "regions": ["영등포동"], "industries": ["편의점"], "primary": "store_count.avg"}},
-    {"id": 50, "tag": "industry-idiom", "q": "가락동에서 어떤 업종이 돈 되나요?", "expect": {"intent": "industry_comparison", "regions": ["가락1동"], "primary": "est_sales.sum", "order": "desc", "top_n": 5}},
-    {"id": 51, "tag": "industry-idiom", "q": "독산 요즘 장사 안 되는 업종", "expect": {"intent": "industry_comparison", "regions": ["독산1동"], "primary": "est_sales.sum", "order": "asc", "top_n": 5}},
-    {"id": 52, "tag": "industry", "q": "압구정 업종 순위 알려줘", "expect": {"intent": "industry_comparison", "regions": ["압구정동"], "primary": "est_sales.sum", "order": "desc", "top_n": 5}}
+    {
+      "id": 1,
+      "tag": "lookup",
+      "q": "강남 매출 알려줘",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "강남"
+        ],
+        "primary": "est_sales.sum"
+      }
+    },
+    {
+      "id": 2,
+      "tag": "idiom-overall",
+      "q": "성수 요즘 장사 어때?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "primary": "est_sales.sum",
+        "metrics_include": [
+          "est_sales.growth_rate",
+          "est_sales.per_store"
+        ],
+        "period": "last4"
+      }
+    },
+    {
+      "id": 3,
+      "tag": "idiom-efficiency",
+      "q": "홍대는 한 달에 얼마나 벌어?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "홍대"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 4,
+      "tag": "idiom-count",
+      "q": "이태원에 점포 몇 개야?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "이태원"
+        ],
+        "primary": "store_count.avg"
+      }
+    },
+    {
+      "id": 5,
+      "tag": "idiom-count",
+      "q": "명동에 가게 몇 개 있어?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "명동"
+        ],
+        "primary": "store_count.avg"
+      }
+    },
+    {
+      "id": 6,
+      "tag": "idiom-overall",
+      "q": "건대 카페 잘돼?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "건대"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.sum",
+        "metrics_include": [
+          "est_sales.growth_rate",
+          "est_sales.per_store"
+        ]
+      }
+    },
+    {
+      "id": 7,
+      "tag": "lookup",
+      "q": "압구정 매출 규모 알려줘",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "압구정동"
+        ],
+        "primary": "est_sales.sum"
+      }
+    },
+    {
+      "id": 8,
+      "tag": "ranking",
+      "q": "매출이 제일 높은 동네는?",
+      "expect": {
+        "intent": "ranking",
+        "regions": [],
+        "primary": "est_sales.sum",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 9,
+      "tag": "idiom-growth",
+      "q": "어디가 제일 핫해?",
+      "expect": {
+        "intent": "ranking",
+        "regions": [],
+        "primary": "est_sales.growth_rate",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 10,
+      "tag": "idiom-growth",
+      "q": "요즘 뜨는 상권은?",
+      "expect": {
+        "intent": "ranking",
+        "regions": [],
+        "primary": "est_sales.growth_rate",
+        "order": "desc",
+        "top_n": 5,
+        "period": "last4"
+      }
+    },
+    {
+      "id": 11,
+      "tag": "ranking",
+      "q": "최근 1년 가장 많이 성장한 상권",
+      "expect": {
+        "intent": "ranking",
+        "regions": [],
+        "primary": "est_sales.growth_rate",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 12,
+      "tag": "idiom-overall",
+      "q": "장사 잘되는 곳 TOP 3",
+      "expect": {
+        "intent": "ranking",
+        "regions": [],
+        "primary": "est_sales.sum",
+        "order": "desc",
+        "top_n": 3
+      }
+    },
+    {
+      "id": 13,
+      "tag": "ranking",
+      "q": "매출 하위 3곳",
+      "expect": {
+        "intent": "ranking",
+        "regions": [],
+        "primary": "est_sales.sum",
+        "order": "asc",
+        "top_n": 3
+      }
+    },
+    {
+      "id": 14,
+      "tag": "ranking",
+      "q": "점포가 제일 많은 상권",
+      "expect": {
+        "intent": "ranking",
+        "regions": [],
+        "primary": "store_count.avg",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 15,
+      "tag": "ranking",
+      "q": "폐업이 많은 동네는?",
+      "expect": {
+        "intent": "ranking",
+        "regions": [],
+        "primary": "close_count.sum",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 16,
+      "tag": "idiom-overall",
+      "q": "카페가 잘 되는 상권은?",
+      "expect": {
+        "intent": "ranking",
+        "regions": [],
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.sum",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 17,
+      "tag": "ranking",
+      "q": "점포당 매출이 높은 곳",
+      "expect": {
+        "intent": "ranking",
+        "regions": [],
+        "primary": "est_sales.per_store",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 18,
+      "tag": "industry-idiom",
+      "q": "가산동에서 잘나가는 업종",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "가산동"
+        ],
+        "primary": "est_sales.sum",
+        "metrics_include": [
+          "est_sales.growth_rate",
+          "est_sales.per_store"
+        ],
+        "order": "desc",
+        "top_n": 5,
+        "period": "last4"
+      }
+    },
+    {
+      "id": 19,
+      "tag": "industry-idiom",
+      "q": "제기동에서 잘나가는 업종",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "제기동"
+        ],
+        "primary": "est_sales.sum",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 20,
+      "tag": "industry-idiom",
+      "q": "성수에서 인기 있는 업종은?",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "성수"
+        ],
+        "primary": "est_sales.sum",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 21,
+      "tag": "industry-idiom",
+      "q": "강남 요즘 뜨는 업종",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "강남"
+        ],
+        "primary": "est_sales.growth_rate",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 22,
+      "tag": "industry",
+      "q": "홍대에서 매출 제일 큰 업종 3개",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "홍대"
+        ],
+        "primary": "est_sales.sum",
+        "order": "desc",
+        "top_n": 3
+      }
+    },
+    {
+      "id": 23,
+      "tag": "industry",
+      "q": "이태원 업종별 매출 비교해줘",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "이태원"
+        ],
+        "primary": "est_sales.sum",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 24,
+      "tag": "industry",
+      "q": "2024년 강남에서 매출이 증가한 업종",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "강남"
+        ],
+        "primary": "est_sales.growth_rate",
+        "period": {
+          "start": "2024-01",
+          "end": "2024-12"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "tag": "industry-idiom",
+      "q": "여의도에서 장사 잘되는 업종 알려줘",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "여의동"
+        ],
+        "primary": "est_sales.sum",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 26,
+      "tag": "compare-idiom",
+      "q": "성수와 홍대 중 어디가 더 잘돼?",
+      "expect": {
+        "intent": "region_comparison",
+        "regions": [
+          "성수",
+          "홍대"
+        ],
+        "primary": "est_sales.sum"
+      }
+    },
+    {
+      "id": 27,
+      "tag": "compare",
+      "q": "성수 vs 홍대 카페 매출",
+      "expect": {
+        "intent": "region_comparison",
+        "regions": [
+          "성수",
+          "홍대"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.sum"
+      }
+    },
+    {
+      "id": 28,
+      "tag": "compare",
+      "q": "건대랑 이태원 점포 수 비교",
+      "expect": {
+        "intent": "region_comparison",
+        "regions": [
+          "건대",
+          "이태원"
+        ],
+        "primary": "store_count.avg"
+      }
+    },
+    {
+      "id": 29,
+      "tag": "compare",
+      "q": "강남 압구정 청담 중에 매출 높은 데는?",
+      "expect": {
+        "intent": "region_comparison",
+        "regions": [
+          "강남",
+          "압구정동",
+          "청담동"
+        ],
+        "primary": "est_sales.sum"
+      }
+    },
+    {
+      "id": 30,
+      "tag": "trend",
+      "q": "성수 매출 추이",
+      "expect": {
+        "intent": "sales_trend",
+        "regions": [
+          "성수"
+        ],
+        "primary": "est_sales.sum"
+      }
+    },
+    {
+      "id": 31,
+      "tag": "trend",
+      "q": "홍대 카페 분기별 매출 변화",
+      "expect": {
+        "intent": "sales_trend",
+        "regions": [
+          "홍대"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.sum"
+      }
+    },
+    {
+      "id": 32,
+      "tag": "trend-idiom",
+      "q": "논현 요즘 매출 흐름",
+      "expect": {
+        "intent": "sales_trend",
+        "regions": [
+          "논현1동"
+        ],
+        "primary": "est_sales.sum",
+        "period": "last4"
+      }
+    },
+    {
+      "id": 33,
+      "tag": "period",
+      "q": "작년 성수 매출",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "period": {
+          "start": "2025-01",
+          "end": "2025-12"
+        }
+      }
+    },
+    {
+      "id": 34,
+      "tag": "period",
+      "q": "올해 홍대 매출",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "홍대"
+        ],
+        "period": {
+          "start": "2026-01",
+          "end": "2026-06"
+        }
+      }
+    },
+    {
+      "id": 35,
+      "tag": "period",
+      "q": "지난 분기 강남 매출",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "강남"
+        ],
+        "period": "last1"
+      }
+    },
+    {
+      "id": 36,
+      "tag": "period",
+      "q": "최근 2년 명동 매출 추이",
+      "expect": {
+        "intent": "sales_trend",
+        "regions": [
+          "명동"
+        ],
+        "period": {
+          "start": "2024-07",
+          "end": "2026-06"
+        }
+      }
+    },
+    {
+      "id": 37,
+      "tag": "blocked",
+      "q": "성수에서 카페 차리면 괜찮을까?",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "지원하지 않습니다"
+      }
+    },
+    {
+      "id": 38,
+      "tag": "blocked",
+      "q": "홍대 창업 추천해줘",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "지원하지 않습니다"
+      }
+    },
+    {
+      "id": 39,
+      "tag": "blocked",
+      "q": "성수 월별 매출",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "월별"
+      }
+    },
+    {
+      "id": 40,
+      "tag": "blocked",
+      "q": "잠실 매출 알려줘",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "지원하는 지역"
+      }
+    },
+    {
+      "id": 41,
+      "tag": "blocked",
+      "q": "카페 점포 비중 높은 곳",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "비중"
+      }
+    },
+    {
+      "id": 42,
+      "tag": "blocked",
+      "q": "노량진 매출",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "노량진1동"
+      }
+    },
+    {
+      "id": 43,
+      "tag": "blocked",
+      "q": "분석 좀 해줘",
+      "expect": {
+        "status": "needs_clarification"
+      }
+    },
+    {
+      "id": 44,
+      "tag": "blocked",
+      "q": "성수 유동인구 알려줘",
+      "expect": {
+        "status": "needs_clarification"
+      }
+    },
+    {
+      "id": 45,
+      "tag": "blocked",
+      "q": "성수 서점 매출 알려줘",
+      "expect": {
+        "status": "needs_clarification"
+      }
+    },
+    {
+      "id": 46,
+      "tag": "idiom-overall",
+      "q": "청담동 술집 장사 잘돼?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "청담동"
+        ],
+        "industries": [
+          "주점"
+        ],
+        "primary": "est_sales.sum",
+        "metrics_include": [
+          "est_sales.growth_rate",
+          "est_sales.per_store"
+        ]
+      }
+    },
+    {
+      "id": 47,
+      "tag": "idiom-overall",
+      "q": "신사동 미용 업종 인기 있어?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "신사동"
+        ],
+        "industries": [
+          "미용"
+        ],
+        "primary": "est_sales.sum"
+      }
+    },
+    {
+      "id": 48,
+      "tag": "idiom-efficiency",
+      "q": "한강로 카페 점포당 월 매출",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "한강로동"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 49,
+      "tag": "idiom-count",
+      "q": "영등포 편의점 몇 개야",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "영등포동"
+        ],
+        "industries": [
+          "편의점"
+        ],
+        "primary": "store_count.avg"
+      }
+    },
+    {
+      "id": 50,
+      "tag": "industry-idiom",
+      "q": "가락동에서 어떤 업종이 돈 되나요?",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "가락1동"
+        ],
+        "primary": "est_sales.sum",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 51,
+      "tag": "industry-idiom",
+      "q": "독산 요즘 장사 안 되는 업종",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "독산1동"
+        ],
+        "primary": "est_sales.sum",
+        "order": "asc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 52,
+      "tag": "industry",
+      "q": "압구정 업종 순위 알려줘",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "압구정동"
+        ],
+        "primary": "est_sales.sum",
+        "order": "desc",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 53,
+      "tag": "composition",
+      "q": "주말 매출 비중 높은 곳",
+      "expect": {
+        "intent": "ranking",
+        "primary": "weekend_sales.ratio"
+      }
+    },
+    {
+      "id": 54,
+      "tag": "composition",
+      "q": "20대 손님 비중이 높은 상권은?",
+      "expect": {
+        "intent": "ranking",
+        "primary": "age_20_sales.ratio"
+      }
+    },
+    {
+      "id": 55,
+      "tag": "composition",
+      "q": "저녁 장사 강한 곳은?",
+      "expect": {
+        "intent": "ranking",
+        "primary": "time_17_21_sales.ratio"
+      }
+    },
+    {
+      "id": 56,
+      "tag": "composition",
+      "q": "한강로는 언제 매출이 몰려?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "한강로동"
+        ],
+        "primary": "time_00_06_sales.ratio"
+      }
+    },
+    {
+      "id": 57,
+      "tag": "composition",
+      "q": "성수 손님 연령대는?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "primary": "age_10_sales.ratio"
+      }
+    },
+    {
+      "id": 58,
+      "tag": "closure",
+      "q": "폐업률 높은 곳은?",
+      "expect": {
+        "intent": "ranking",
+        "primary": "close_count.ratio"
+      }
+    },
+    {
+      "id": 59,
+      "tag": "location",
+      "q": "의류의 경우 어디서 장사하는게 좋아?",
+      "expect": {
+        "intent": "ranking",
+        "industries": [
+          "의류"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 60,
+      "tag": "location",
+      "q": "한의원 개원은 어디서하는게 좋아?",
+      "expect": {
+        "intent": "ranking",
+        "industries": [
+          "한의원"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 61,
+      "tag": "location",
+      "q": "어디서 장사하는게 좋아?",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "업종"
+      }
+    },
+    {
+      "id": 62,
+      "tag": "competition",
+      "q": "카페 경쟁이 심한 곳은?",
+      "expect": {
+        "intent": "ranking",
+        "industries": [
+          "카페"
+        ],
+        "primary": "store_count.avg"
+      }
+    },
+    {
+      "id": 63,
+      "tag": "info",
+      "q": "추정매출이 뭐야?",
+      "expect": {
+        "status": "info"
+      }
+    },
+    {
+      "id": 64,
+      "tag": "info",
+      "q": "데이터 출처가 어디야?",
+      "expect": {
+        "status": "info"
+      }
+    }
   ]
 }

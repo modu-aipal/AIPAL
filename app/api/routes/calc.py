@@ -18,7 +18,7 @@ router = APIRouter(tags=["calc"])
 
 
 class AnalyzeResponse(BaseModel):
-    status: str  # ok | needs_clarification
+    status: str  # ok | needs_clarification | info
     plan_response: PlanResponse
     calc: CalcApiResponse | None = None
 
@@ -73,6 +73,8 @@ async def plan_or_raise(question: str, dataset) -> PlanResponse:
 async def analyze(req: PlanRequest, calc: Calculator = Depends(_calculator)) -> AnalyzeResponse:
     """자연어 질문 -> 분석 계획 -> 계산 엔진. 재질문이 필요하면 계산하지 않는다."""
     pr = await plan_or_raise(req.question, req.dataset)
+    if pr.status == "info":
+        return AnalyzeResponse(status="info", plan_response=pr)
     if pr.status != "ok":
         return AnalyzeResponse(status="needs_clarification", plan_response=pr)
     return AnalyzeResponse(status="ok", plan_response=pr, calc=await run_calc(pr.plan, calc))

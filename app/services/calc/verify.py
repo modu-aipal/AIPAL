@@ -28,7 +28,7 @@ def verify_result(req: CalcRequest, res: CalcResult) -> None:
     if not need_cols <= set(a.columns_used):
         bad("columns_used에 요청 컬럼이 빠져 있음")
     keys = {f"{m.column}.{m.op}" for m in req.metrics}
-    growth_keys = {f"{m.column}.{m.op}" for m in req.metrics if m.op == "growth_rate"}
+    growth_keys = {f"{m.column}.{m.op}" for m in req.metrics if m.op in ("growth_rate", "ratio", "per_store")}
     for row in res.results:
         if set(row.group) != set(req.group_by):
             bad(f"결과 그룹 키가 group_by와 다름: {sorted(row.group)}")
@@ -36,6 +36,6 @@ def verify_result(req: CalcRequest, res: CalcResult) -> None:
             bad(f"결과 값 키가 요청 지표와 다름: {sorted(row.values)}")
         for k, v in row.values.items():
             if v is None and (k not in growth_keys or not row.notes):
-                bad(f"{k}: null 값은 growth_rate 이며 notes 사유가 있을 때만 허용")
+                bad(f"{k}: null 값은 growth_rate·ratio·per_store 이며 notes 사유가 있을 때만 허용")
     if res.results and sum(r.rows_used for r in res.results) > res.rows_used:
         bad("그룹별 rows_used 합이 전체 rows_used보다 큼")

@@ -47,6 +47,10 @@ def default_dataset() -> DatasetMeta:
             num("est_sales"), num("est_count"),
             num("weekday_sales"), num("weekend_sales"),
             num("male_sales"), num("female_sales"),
+            # 요일·시간대·연령대 매출: 구성비(ratio) 질문에 쓴다 (C 엔진 MEASURES 와 같은 이름)
+            *[num(f"{d}_sales") for d in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")],
+            *[num(f"time_{b}_sales") for b in ("00_06", "06_11", "11_14", "14_17", "17_21", "21_24")],
+            *[num(f"age_{a}_sales") for a in ("10", "20", "30", "40", "50", "60_plus")],
             # 점포 지표 (OA-22172). 점포 수는 프랜차이즈를 포함한 전체
             num("store_count"), num("general_store_count"), num("franchise_count"),
             num("open_count"), num("close_count"),

@@ -38,7 +38,7 @@ class GrowthSpec(BaseModel):
 
 
 class CalcRequest(BaseModel):
-    spec_version: Literal["1.0"] = SPEC_VERSION
+    spec_version: Literal["1.0", "1.1"] = SPEC_VERSION  # 1.1 = per_store/ratio 같은 확장 op를 쓸 때
     request_id: str
     dataset_id: str
     time_column: str | None = None

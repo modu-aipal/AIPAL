@@ -39,7 +39,9 @@ def build_request(plan: AnalysisPlan, dataset_id: str, request_id: str | None = 
         if plan.period is None:
             raise CalcRequestError("growth_rate에는 기간이 필요합니다")
         growth = GrowthSpec(current_period=plan.period, baseline_period=baseline_for(plan.period))
+    extended = any(m.op in ("per_store", "ratio") for m in plan.metrics)
     return CalcRequest(
+        spec_version="1.1" if extended else "1.0",
         request_id=request_id or uuid.uuid4().hex,
         dataset_id=dataset_id,
         time_column=plan.time_column,

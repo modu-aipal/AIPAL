@@ -211,6 +211,8 @@ async def generate_explanation(question: str, plan: AnalysisPlan, result: CalcRe
         parts.append("\n".join(f"→ {n}" for n in notes))
     if interp:
         parts.append(interp)
+    if plan.disclaimers:  # 입지·경쟁 질문의 고정 한계 안내
+        parts.append("\n".join(f"※ {d}" for d in plan.disclaimers))
     if caveats:
         parts.append("\n".join(caveats))
     return "\n\n".join(parts), wants_model and interp is None

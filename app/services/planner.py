@@ -30,7 +30,16 @@ from app.services.periods import (
     quarter_aligned,
     relative_period,
 )
-from app.services.understand import has_place_noun, parse_top_n, resolve_concept, resolve_direction
+from app.services import data_facts
+from app.services.composition import RATIO_COLUMNS, detect_composition
+from app.services.understand import (
+    has_place_noun,
+    is_competition_question,
+    is_location_question,
+    parse_top_n,
+    resolve_concept,
+    resolve_direction,
+)
 from app.services.periods import explicit_period as _period_from_question  # noqa: F401 (테스트가 사용)
 from app.services.periods import quarter_aligned as _quarter_aligned  # noqa: F401 (테스트가 사용)
 
@@ -126,6 +135,8 @@ def validate_draft(d: PlanDraft, ds: DatasetMeta) -> list[str]:
             v.append(f"metrics: '{m.column}'은(는) 집계 가능한 숫자 지표가 아닙니다")
         if m.op == "growth_rate" and not any(x.dtype == "date" for x in ds.columns):
             v.append("metrics: growth_rate에는 날짜 컬럼이 필요합니다")
+        if m.op == "ratio" and m.column not in RATIO_COLUMNS:
+            v.append(f"metrics: ratio는 구성비 컬럼에만 쓸 수 있습니다 ('{m.column}')")
         if m.op == "per_store":
             if not is_sales_column(m.column):
                 v.append(f"metrics: per_store는 매출 지표에만 쓸 수 있습니다 ('{m.column}')")
@@ -211,6 +222,10 @@ _CIRCLED = "①②③④⑤"
 _NULL_DRAFT = PlanDraft(status="ok", intent="other")  # 모델이 아무것도 못 알아들은 최악의 경우
 
 
+def missing_unavailable(q: str) -> bool:
+    return any(w in q for w in _UNAVAILABLE)
+
+
 def _infer_intent(q: str, n_areas: int, asks_industry: bool, rank_cue: bool = False) -> str:
     """명시적 단어로만 보수적으로 유형을 정한다. 못 정하면 other."""
     if any(w in q for w in _TREND_WORDS):
@@ -253,6 +268,8 @@ def _suggestion_candidates(kind: str, ctx: dict) -> list[str]:
         return [f"{pre}매출이 가장 높은 상권은?", f"성수와 홍대의 {pre}매출을 비교해줘"]
     if kind == "monthly":
         return [f"{a0} {pre}분기별 매출 추이 보여줘"]
+    if kind == "need_industry":
+        return ["카페는 어디서 장사하는 게 좋아?", "의류는 어디서 장사하는 게 좋아?", "음식점은 어디서 장사하는 게 좋아?"]
     if kind == "ratio":
         if ctx.get("weekend"):
             return [f"{pre}주말 매출이 가장 높은 상권은?", f"{a0} {pre}주말 매출 알려줘"]
@@ -353,12 +370,25 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         sugg = _suggestions(kind, {**ctx, **(extra or {})}, ds, latest) if suggest else []
         return _clarify(model, conds, cols_, reason, draft.clarification_question, sugg)
 
+    # --- 데이터 자체에 대한 질문: 계산 없이 고정 문구로 답한다 ---
+    if suggest:
+        fact = data_facts.answer_for(question, latest)
+        if fact:
+            return PlanResponse(status="info", info_topic=fact[0], info_text=fact[1], model=model, elapsed_ms=0)
+
+    comp = detect_composition(question, set(cols))
+    is_loc = is_location_question(question)
+    is_comp = is_competition_question(question)
+
     # --- 지원하지 않는 요청: 이유와 가능한 질문을 알려 준다 ---
-    if any(w in question for w in _JUDGMENT_WORDS):
+    if is_loc and not inds and not unknown_ind and not missing_unavailable(question):
+        return clarify("need_industry", ["industry"],
+                       reason="어떤 업종인지 알려 주세요. 업종을 알면 지역별 데이터 순위로 보여 드릴 수 있어요.")
+    if not is_loc and any(w in question for w in _JUDGMENT_WORDS):
         return clarify("judgment", reason="추천·창업 성공 여부 판단은 지원하지 않습니다. 대신 데이터로 비교해 볼 수 있습니다.")
     if has_quarter and any(w in question for w in _MONTHLY_WORDS):
         return clarify("monthly", ["period"], reason="데이터가 분기 단위라 월별 분석은 지원하지 않습니다.")
-    if any(w in question for w in RATIO_WORDS):
+    if comp is None and any(w in question for w in RATIO_WORDS):
         return clarify("ratio", reason="비중·비율 계산은 아직 지원하지 않습니다.")
     if am.ambiguous:
         opts = am.ambiguous[0]
@@ -390,6 +420,24 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
     # 지표 표현("매출", "점포 수")은 있는데 지원 지역이 없다 -> 지원하지 않는 지역을 물은 것으로 보고 지역을 안내한다
     if intent == "other" and region_col is not None and (infer_metrics(question, set(cols)) or concept):
         intent = "lookup"
+    special = None  # 'composition' | 'location' | 'competition'
+    disclaimers: list[str] = []
+    if comp is not None:
+        special = "composition"
+        intent = "lookup" if len(areas) == 1 else "region_comparison" if len(areas) >= 2 else "ranking"
+        if "추이" in question or "변화" in question:
+            intent = "sales_trend" if areas else intent
+        if comp.distribution and not areas:
+            return clarify("no_area", ["region"],
+                           reason=f"어느 지역인지 알려 주세요. 지원하는 지역은 {', '.join(names)}입니다.")
+    elif is_loc and inds:
+        special = "location"
+        intent, concept = "ranking", "efficiency"
+        disclaimers = ["데이터 순위이며 입지 추천이 아닙니다. 임대료·유동인구·경쟁 강도·권리금은 반영되지 않았어요."]
+    elif is_comp:
+        special = "competition"
+        intent = "ranking" if not areas else ("region_comparison" if len(areas) >= 2 else "lookup")
+        disclaimers = ["점포 수와 점포당 매출로 본 경쟁 정도이며 공식 과밀지수가 아닙니다."]
     if model_cols:  # 모델이 '데이터에 없는 항목'을 지적
         return clarify("columns", [], model_cols)
     if intent == "other":
@@ -404,9 +452,24 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
            if v != "metrics가 비어 있습니다"]  # 모델이 만든 없는 컬럼·잘못된 연산은 숨기지 않고 알린다
     if bad:
         raise PlanValidationError(bad)
-    if not explicit and not model_metrics and concept is None and "est_sales" in cols:
+    if not explicit and not model_metrics and concept is None and special is None and "est_sales" in cols:
         assumptions.append("지표: 추정매출")
     metrics, sort_key = build_metrics(intent, concept, explicit, model_metrics, set(cols))
+    if special == "composition":
+        op = "ratio" if comp.ratio else "sum"
+        metrics = [MetricSpec(column=c, op=op) for c in comp.columns]
+        if comp.store:
+            metrics += [MetricSpec(column="store_count", op="avg"), MetricSpec(column=comp.columns[0], op="sum")]
+        sort_key = f"{comp.columns[0]}.{op}"
+        concept = None
+        if comp.note:
+            assumptions.append(comp.note)
+    elif special == "competition":
+        metrics = [MetricSpec(column="store_count", op="avg"), MetricSpec(column="est_sales", op="per_store")]
+        sort_key = "store_count.avg"
+        concept = "count"
+        if direction == "high" or not direction:
+            pass
     metrics = list({(m.column, m.op): m for m in metrics}.values())
 
     # --- 유형별 구조 ---
@@ -482,7 +545,7 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
     plan = AnalysisPlan(
         intent=intent, regions=regions, industries=inds, metrics=metrics, group_by=group_by,
         comparison=comparison, filters=filters, period=period, time_column=time_col,
-        assumptions=assumptions, concept=concept,
+        assumptions=assumptions, concept=concept, disclaimers=disclaimers,
         # 여러 행을 정렬할 때만 방향·기준을 둔다. 순위·업종 비교는 상위 N개(기본 5)만 보여 준다.
         rank_order=(("asc" if direction == "low" else "desc")
                     if intent in ("ranking", "industry_comparison", "region_comparison") else None),
