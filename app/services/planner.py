@@ -22,7 +22,19 @@ from app.services import ollama
 from app.services.areas import AreaMatch, find_areas
 from app.services.dataset import INDUSTRY_ALIASES, REGIONS, default_dataset
 from app.services.latest import latest_quarter
-from app.services.metrics import RATIO_WORDS, STOCK_COLUMNS, build_metrics, infer_metrics, is_sales_column, normalize_op
+from app.services.metrics import (
+    GROWTH_WORDS,
+    RATIO_WORDS,
+    STOCK_COLUMNS,
+    build_metrics,
+    infer_metrics,
+    is_ambiguous_average,
+    is_per_store,
+    is_sales_column,
+    mentions_annual,
+    mentions_avg_ticket,
+    normalize_op,
+)
 from app.services.periods import (
     Quarter,
     default_period,
@@ -244,6 +256,29 @@ def _infer_intent(q: str, n_areas: int, asks_industry: bool, rank_cue: bool = Fa
     return "other"
 
 
+def _adjust_per_store(question: str, intent: str, metrics: list[MetricSpec],
+                      assumptions: list[str]) -> list[MetricSpec]:
+    """점포당 지표를 말했을 때의 조합 규칙 (점포 수 동반, 증감 병기, 모호한 '평균 매출', 월 단위 안내)."""
+    out = list(metrics)
+    has = lambda op: any(m.op == op for m in out)  # noqa: E731
+    col = next((m.column for m in out if is_sales_column(m.column)), "est_sales")
+    one_row = intent in ("lookup", "region_comparison")
+    if is_ambiguous_average(question) and intent != "sales_trend":
+        # '평균 매출': 점포당 월평균과 합계를 함께 보여 주고, 어떻게 읽었는지 밝힌다
+        for op in ("sum", "per_store"):
+            if not any(m.op == op and m.column == col for m in out):
+                out.insert(0 if op == "per_store" else len(out), MetricSpec(column=col, op=op))
+        assumptions.append("'평균 매출'은 점포당 월평균으로 보고, 지역·업종 합계를 함께 보여 드립니다")
+    if one_row and has("per_store") and len(out) == 1:  # 점포당 값의 근거(점포 수)를 같이 보여 준다
+        out.append(MetricSpec(column="store_count", op="avg"))
+    if has("per_store") and not has("growth_rate") and any(w in question for w in GROWTH_WORDS)             and intent != "ranking":
+        out.append(MetricSpec(column=col, op="growth_rate"))
+        assumptions.append("증감률은 총매출 기준이며 점포당 값의 증감이 아닙니다")
+    if has("per_store") and mentions_annual(question):
+        assumptions.append("점포당 금액은 월평균입니다 (연으로 환산하려면 12를 곱하세요)")
+    return out
+
+
 # ---------------------------------------------------------------- 재질문과 제안
 def _pair(areas: list[str], pool: tuple[str, ...] = ("성수", "홍대", "강남")) -> tuple[str, str]:
     """제안용 지역 두 곳 (질문에 나온 지역 우선)."""
@@ -271,6 +306,8 @@ def _suggestion_candidates(kind: str, ctx: dict) -> list[str]:
         return [f"{pre}매출이 가장 높은 상권은?", f"성수와 홍대의 {pre}매출을 비교해줘"]
     if kind == "monthly":
         return [f"{a0} {pre}분기별 매출 추이 보여줘"]
+    if kind == "avg_ticket":
+        return [f"{a0} {pre}점포당 월평균 매출 알려줘", f"{a0} {pre}결제 건수 알려줘"]
     if kind == "need_industry":
         return ["카페는 어디서 장사하는 게 좋아?", "의류는 어디서 장사하는 게 좋아?", "음식점은 어디서 장사하는 게 좋아?"]
     if kind == "ratio":
@@ -400,6 +437,8 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         opts = am.ambiguous[0]
         return clarify("ambiguous", ["region"], reason=f"'{opts[0][:-2]}'은(는) {' · '.join(opts)} 두 곳입니다. 어느 쪽인가요?",
                        extra={"options": opts})
+    if mentions_avg_ticket(question):
+        return clarify("avg_ticket", reason="객단가(결제 한 건당 금액)는 아직 계산하지 않습니다. 대신 점포당 월평균 매출과 결제 건수를 볼 수 있어요.")
     missing_terms = [w for w in _UNAVAILABLE if w in question]
     if missing_terms:
         return clarify("columns", [], missing_terms,
@@ -416,6 +455,8 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
     asks_industry = ind_col is not None and "업종" in question and not inds
     # 의미 해석: 개념(잘나가는/뜨는/…)·방향·개수. 모델이 이해한 값과 코드의 알려진 표현을 합친다.
     concept = resolve_concept(question, draft.concept, get_settings().concept_priority)
+    if is_per_store(question) and concept in (None, "none", "size", "overall"):
+        concept = "efficiency"  # '점포당'이라고 말했으면 모델이 size로 읽어도 점포당이 기준이다
     direction = resolve_direction(question, draft.direction)
     top_n = parse_top_n(question, draft.top_n)
     rank_cue = (any(w in question for w in _RANK_WORDS) or top_n is not None
@@ -487,6 +528,9 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         if direction == "high" or not direction:
             pass
     metrics = list({(m.column, m.op): m for m in metrics}.values())
+    if special is None:
+        metrics = _adjust_per_store(question, intent, metrics, assumptions)
+        sort_key = sort_key or (f"{metrics[0].column}.{metrics[0].op}" if metrics else None)
 
     # --- 유형별 구조 ---
     regions = [] if intent == "ranking" else list(areas)
