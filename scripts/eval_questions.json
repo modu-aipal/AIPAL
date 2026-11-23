@@ -830,6 +830,130 @@
         ],
         "primary": "est_sales.per_store"
       }
+    },
+    {
+      "id": 67,
+      "tag": "per-store",
+      "q": "성수 카페 점포별 매출",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 68,
+      "tag": "per-store",
+      "q": "성수 카페 가게별 매출은 얼마야?",
+      "expect": {
+        "intent": "lookup",
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 69,
+      "tag": "per-store",
+      "q": "성수 카페 매장당 얼마 벌어?",
+      "expect": {
+        "intent": "lookup",
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 70,
+      "tag": "per-store",
+      "q": "성수 카페 가게 하나당 매출",
+      "expect": {
+        "intent": "lookup",
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 71,
+      "tag": "per-store",
+      "q": "성수 카페 점포 수 대비 매출",
+      "expect": {
+        "intent": "lookup",
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 72,
+      "tag": "per-store",
+      "q": "점포별 매출 TOP 5",
+      "expect": {
+        "intent": "ranking",
+        "primary": "est_sales.per_store",
+        "top_n": 5
+      }
+    },
+    {
+      "id": 73,
+      "tag": "per-store",
+      "q": "가게당 매출이 가장 높은 업종",
+      "expect": {
+        "intent": "industry_comparison",
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 74,
+      "tag": "per-store",
+      "q": "성수 카페 점포당 매출과 점포 수",
+      "expect": {
+        "intent": "lookup",
+        "primary": "est_sales.per_store",
+        "metrics_include": [
+          "store_count.avg"
+        ]
+      }
+    },
+    {
+      "id": 75,
+      "tag": "per-store",
+      "q": "성수 점포당 매출 증가율",
+      "expect": {
+        "intent": "lookup",
+        "primary": "est_sales.per_store",
+        "metrics_include": [
+          "est_sales.growth_rate"
+        ]
+      }
+    },
+    {
+      "id": 76,
+      "tag": "per-store",
+      "q": "성수 카페 평균 매출",
+      "expect": {
+        "intent": "lookup",
+        "primary": "est_sales.per_store",
+        "metrics_include": [
+          "est_sales.sum"
+        ]
+      }
+    },
+    {
+      "id": 77,
+      "tag": "per-store",
+      "q": "성수 카페 객단가",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "객단가"
+      }
+    },
+    {
+      "id": 78,
+      "tag": "per-store",
+      "q": "점포 수 많은 곳",
+      "expect": {
+        "intent": "ranking",
+        "primary": "store_count.avg"
+      }
     }
   ]
 }
