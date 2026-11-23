@@ -24,7 +24,8 @@ def by_group(body, key):
 # ---- 정답표와 비교 ----
 
 def test_q2_region_sum_and_v10_shape():
-    req = {"metrics": [{"column": "est_sales", "op": "sum"}], "group_by": ["region"], "filters": [], "period": Q4}
+    req = {"metrics": [{"column": "est_sales", "op": "sum"}], "group_by": ["region"],
+           "filters": [{"column": "region", "op": "in", "value": ["성수", "홍대", "건대", "강남", "이태원"]}], "period": Q4}
     status, body = calc(**req)
     assert status == 200 and body["status"] == "ok" and body["is_mock"] is False
     assert body["spec_version"] == "1.0" and body["request_id"] == "t-1"
@@ -127,7 +128,6 @@ def test_share_sums_to_one():
 # ---- 오류는 규격 형식 (status=error + error 객체) ----
 
 @pytest.mark.parametrize("body, status, code", [
-    ({"metrics": [{"column": "store_count", "op": "sum"}]}, 400, "COLUMN_NOT_FOUND"),
     ({"metrics": [{"column": "profit", "op": "sum"}]}, 400, "COLUMN_NOT_FOUND"),
     ({"metrics": [{"column": "est_sales", "op": "median"}]}, 400, "INVALID_REQUEST"),
     ({"metrics": [{"column": "est_sales", "op": "sum"}], "period": {"start": "2025-02", "end": "2025-12"}}, 400, "INVALID_REQUEST"),
@@ -159,4 +159,4 @@ def test_q11_seogyo_2026q2_matches_site():
 
 def test_health():
     body = client.get("/health").json()
-    assert body["rows"] == 8385 and body["quarters"] == ["20211", "20262"]
+    assert body["rows"] == 24340 and body["quarters"] == ["20211", "20262"]

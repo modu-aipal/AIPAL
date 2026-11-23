@@ -10,7 +10,10 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "data" / "sales_5regions.csv"
+DATA = ROOT / "data" / "sales_areas.csv"
+STORES = ROOT / "data" / "stores_areas.csv"
+S = "전체_점포_수"
+STORE_COLS = ("전체_점포_수", "일반_점포_수", "프랜차이즈_점포_수", "개업_점포_수", "폐업_점포_수")
 T = "당월_매출_금액"
 LATEST = "20254"
 REGIONS = ["성수", "홍대", "건대", "강남", "이태원"]
@@ -19,6 +22,9 @@ REGIONS = ["성수", "홍대", "건대", "강남", "이태원"]
 # ---- 방법 1: pandas ----
 def by_pandas():
     df = pd.read_csv(DATA, dtype={"기준_년분기_코드": str, "행정동_코드": str})
+    st = pd.read_csv(STORES, dtype={"기준_년분기_코드": str, "행정동_코드": str})
+    df_all, st_all = df, st
+    df, st = df[df["지역"].isin(REGIONS)], st[st["지역"].isin(REGIONS)]  # Q1~Q13은 처음 5곳 기준 유지
     q = df[df["기준_년분기_코드"] == LATEST]
     seongsu_q = q[q["지역"] == "성수"]
     return {
@@ -35,6 +41,12 @@ def by_pandas():
                 int(df[(df["지역"] == "이태원") & (df["기준_년분기_코드"] == "20244")][T].sum())),
         "Q11": tuple(int(df[(df["기준_년분기_코드"] == "20262") & (df["행정동_코드"] == "11440660")][c].sum())
                      for c in (T, "당월_매출_건수")),
+        "Q12": tuple(int(st[(st["기준_년분기_코드"] == LATEST) & (st["행정동_코드"] == "11440660")][c].sum())
+                     for c in STORE_COLS),
+        "Q13": {k: (int(df[(df["기준_년분기_코드"] == "20262") & (df["지역"] == k)][T].sum()), int(v))
+                for k, v in st[st["기준_년분기_코드"] == "20262"].groupby("지역")[S].sum().items()},
+        "Q14": {k: (int(df_all[(df_all["기준_년분기_코드"] == "20262") & (df_all["지역"] == k)][T].sum()), int(v))
+                for k, v in st_all[st_all["기준_년분기_코드"] == "20262"].groupby("지역")[S].sum().items()},
     }
 
 
@@ -42,6 +54,11 @@ def by_pandas():
 def by_csv():
     with open(DATA, encoding="utf-8-sig", newline="") as f:
         rows = list(csv.DictReader(f))
+    with open(STORES, encoding="utf-8-sig", newline="") as f:
+        srows = list(csv.DictReader(f))
+    rows_all, srows_all = rows, srows
+    rows = [r for r in rows if r["지역"] in REGIONS]  # Q1~Q13은 처음 5곳 기준 유지
+    srows = [r for r in srows if r["지역"] in REGIONS]
     q = [r for r in rows if r["기준_년분기_코드"] == LATEST]
     n = lambda r, c: int(r[c])
 
@@ -74,6 +91,14 @@ def by_csv():
                 sum(n(r, T) for r in rows if r["지역"] == "이태원" and r["기준_년분기_코드"] == "20244")),
         "Q11": tuple(sum(n(r, c) for r in rows if r["기준_년분기_코드"] == "20262" and r["행정동_코드"] == "11440660")
                      for c in (T, "당월_매출_건수")),
+        "Q12": tuple(sum(n(r, c) for r in srows if r["기준_년분기_코드"] == LATEST and r["행정동_코드"] == "11440660")
+                     for c in STORE_COLS),
+        "Q13": {k: (sum(n(r, T) for r in rows if r["기준_년분기_코드"] == "20262" and r["지역"] == k),
+                    sum(n(r, S) for r in srows if r["기준_년분기_코드"] == "20262" and r["지역"] == k))
+                for k in sorted({r["지역"] for r in srows})},
+        "Q14": {k: (sum(n(r, T) for r in rows_all if r["기준_년분기_코드"] == "20262" and r["지역"] == k),
+                    sum(n(r, S) for r in srows_all if r["기준_년분기_코드"] == "20262" and r["지역"] == k))
+                for k in sorted({r["지역"] for r in srows_all})},
     }
 
 
@@ -90,7 +115,8 @@ dong_count = pd.read_csv(ROOT / "data" / "region_map.csv")["지역"].value_count
 L = [
     "# 정답표 초안",
     "",
-    "- 데이터: `data/sales_5regions.csv` (서울시 상권분석서비스 추정매출-행정동, 2021년 1분기~2026년 2분기, 단위 원)",
+    "- 데이터: `data/sales_areas.csv`·`data/stores_areas.csv` (서울시 상권분석서비스 추정매출·점포-행정동, 2021년 1분기~2026년 2분기, 단위 원)",
+    "- 지역: 대시보드와 같은 20곳(`data/area_map.csv` → `calc_engine/data/region_map.csv`). **Q1~Q13은 처음 5곳(성수·홍대·건대·강남·이태원) 기준**, Q14는 20곳 전체",
     "- Q1~Q10은 2025년 4분기 기준(공식 파일 마지막 분기). Q11은 2026년 2분기(Sheet 내려받기)",
     "- 계산: pandas와 파이썬 기본 csv로 따로 계산해 **두 결과가 모두 같음**을 확인함 (`python calc_engine/scripts/answer_key.py`)",
     "- 엑셀 등 세 번째 방법으로 사람이 다시 확인하기 전까지는 '초안'",
@@ -150,7 +176,26 @@ L = [
     f"- 매출: {won(a['Q11'][0])} ({eok(a['Q11'][0])}) — 사이트 지도 표시 3,642.8억 원",
     f"- 매출 ÷3 ÷점포수 8,783 = {a['Q11'][0] / 3 / 8783:,.0f}원 — 사이트 '점포당 월평균 매출' 1,383만 원",
     f"- 건수 ÷3 ÷8,783 = {a['Q11'][1] / 3 / 8783:,.1f}건 — 사이트 '월평균 매출건수' 582건",
-    "- 점포수 8,783개는 사이트 표시값(이 데이터에는 점포수 없음). 매출·건수가 분기 3개월 합계라는 근거",
+    "- 점포수 8,783개는 사이트 표시값. 매출·건수가 분기 3개월 합계라는 근거",
+    "",
+    "## Q12. 서교동 2025년 4분기 점포 (점포 데이터 OA-22172, 사이트와 대조)",
+    f"- 전체 점포 {a['Q12'][0]:,} / 일반 {a['Q12'][1]:,} / 프랜차이즈 {a['Q12'][2]:,} / 개업 {a['Q12'][3]:,} / 폐업 {a['Q12'][4]:,}",
+    "- 사이트: 점포수 8,820 / 일반점포 8,101 / 프랜차이즈 719 / 개업 223 / 폐업 239",
+    "- 원본 '점포_수'는 일반 점포, '유사_업종_점포_수'가 전체 점포 (가공 파일은 일반_점포_수·전체_점포_수로 이름을 바꿈)",
+    "",
+    "## Q13. 2026년 2분기 지역별 점포당 월평균 매출 (매출 ÷ (전체 점포 × 3))",
+    "| 순위 | 지역 | 매출 | 전체 점포 | 점포당 월평균 |",
+    "|---|---|---|---|---|",
+    *[f"| {i} | {k} | {eok(v[0])} | {v[1]:,} | {v[0] / (v[1] * 3) / 1e4:,.0f}만 원 |"
+      for i, (k, v) in enumerate(sorted(a["Q13"].items(), key=lambda kv: -kv[1][0] / (kv[1][1] * 3)), 1)],
+    "",
+    "점포당으로 보면 총매출 순위와 달라질 수 있음 (성수는 동 4개라 총매출이 커 보임). 점포 수에는 매출이 없는 업종 점포도 포함 (사이트와 같은 방식)",
+    "",
+    "## Q14. 2026년 2분기 20곳 전체 매출·점포·점포당 월평균 (점포당 월평균 순)",
+    "| 순위 | 지역 | 매출 | 전체 점포 | 점포당 월평균 |",
+    "|---|---|---|---|---|",
+    *[f"| {i} | {k} | {eok(v[0])} | {v[1]:,} | {v[0] / (v[1] * 3) / 1e4:,.0f}만 원 |"
+      for i, (k, v) in enumerate(sorted(a["Q14"].items(), key=lambda kv: -kv[0 if False else 1][0] / (kv[1][1] * 3)), 1)],
     "",
 ]
 (ROOT / "data" / "answer_key.md").write_text("\n".join(L), encoding="utf-8")
