@@ -5,6 +5,7 @@
 """
 from app.schemas.calc import CalcResult, CalcRow
 from app.schemas.plan import AnalysisPlan
+from app.services.composition import RATIO_COLUMNS, item_label, ratio_full, ratio_short
 from app.services.periods import label as quarter_label
 from app.services.ranking import RankedView, group_label
 
@@ -15,7 +16,7 @@ COLUMN_LABEL = {
     "store_count": "점포 수", "general_store_count": "일반 점포 수", "franchise_count": "프랜차이즈 점포 수",
     "open_count": "개업 점포 수", "close_count": "폐업 점포 수",
 }
-OP_LABEL = {"sum": "합계", "avg": "분기당 평균", "growth_rate": "증감률", "per_store": "점포당 월평균"}
+OP_LABEL = {"sum": "합계", "avg": "분기당 평균", "growth_rate": "증감률", "per_store": "점포당 월평균", "ratio": "비중"}
 STORE_COLUMNS = {"store_count", "general_store_count", "franchise_count", "open_count", "close_count"}
 # 목록 한 줄에 쓰는 짧은 이름
 _SHORT = {"est_sales": "매출", "est_count": "결제 건수", "weekday_sales": "주중 매출", "weekend_sales": "주말 매출",
@@ -24,7 +25,7 @@ _SHORT = {"est_sales": "매출", "est_count": "결제 건수", "weekday_sales": 
           "close_count": "폐업"}
 # '무엇 기준으로 정렬했나'를 설명하는 말
 _BASIS = {"sum": "매출 규모", "growth_rate": "매출 증가율", "per_store": "점포당 월평균 매출", "avg": "분기당 평균"}
-_ORDER = {"sum": 0, "avg": 0, "growth_rate": 1, "per_store": 2}  # 규모 → 증감 → 점포당 순으로 보여 준다
+_ORDER = {"sum": 0, "avg": 0, "ratio": 0, "growth_rate": 1, "per_store": 2}  # 규모 → 증감 → 점포당 순으로 보여 준다
 
 
 def fmt_value(op: str, v: float | None, notes: list[str], column: str | None = None) -> str:
@@ -36,6 +37,8 @@ def fmt_value(op: str, v: float | None, notes: list[str], column: str | None = N
         return "산출 불가"
     if op == "growth_rate":
         return f"{v * 100:+.1f}%"
+    if op == "ratio":
+        return f"{v * 100:.1f}%"
     if op == "per_store":
         return f"{v / 1e4:,.0f}만 원"
     if column in STORE_COLUMNS:
@@ -55,8 +58,16 @@ def eun_neun(word: str) -> str:
     return word + "은(는)"
 
 
+def col_label(column: str) -> str:
+    if column in COLUMN_LABEL:
+        return COLUMN_LABEL[column]
+    return f"{item_label(column)} 매출" if column in RATIO_COLUMNS else column
+
+
 def short_label(column: str, op: str) -> str:
-    base = _SHORT.get(column, column)
+    if op == "ratio":
+        return ratio_short(column)
+    base = _SHORT.get(column) or (f"{item_label(column)} 매출" if column in RATIO_COLUMNS else column)
     if op == "growth_rate":
         return "증감" if column == "est_sales" else f"{base} 증감"
     if op == "per_store":
@@ -65,14 +76,20 @@ def short_label(column: str, op: str) -> str:
 
 
 def full_label(column: str, op: str) -> str:
-    return f"{COLUMN_LABEL.get(column, column)} {OP_LABEL.get(op, op)}"
+    if op == "ratio":
+        return ratio_full(column)
+    return f"{col_label(column)} {OP_LABEL.get(op, op)}"
 
 
 def basis_text(plan: AnalysisPlan) -> str:
     key = plan.sort_by or ""
     col, _, op = key.partition(".")
+    if op == "ratio":
+        return ratio_full(col)
     if col in STORE_COLUMNS:
         return COLUMN_LABEL.get(col, col)
+    if op == "sum" and col != "est_sales" and col in RATIO_COLUMNS:
+        return f"{col_label(col)} 규모"
     return _BASIS.get(op, "값")
 
 
@@ -113,6 +130,9 @@ def list_lines(plan: AnalysisPlan, result: CalcResult, view: RankedView) -> list
     if len(rows) == 1 and not rows[0].group:  # 한 곳의 값: 지표를 한 줄씩
         if len(ops) == 1:
             return []  # 결론 문장이 값을 말한다
+        if all(m.op == "ratio" for m in ops):  # 구성비 분포: 항목 이름과 비중만
+            return [f"• {item_label(m.column)}: {fmt_value('ratio', rows[0].values.get(f'{m.column}.ratio'), rows[0].notes)}"
+                    for m in ops]
         ordered = sorted(ops, key=lambda m: _ORDER.get(m.op, 3))
         return [f"• {full_label(m.column, m.op)}: "
                 f"{fmt_value(m.op, rows[0].values.get(f'{m.column}.{m.op}'), rows[0].notes, m.column)}" for m in ordered]
@@ -139,7 +159,7 @@ def headline(plan: AnalysisPlan, result: CalcResult, view: RankedView) -> str:
         total = f"전체 {view.total}{'개' if unit == '업종' else '곳'} 중"
         if plan.intent == "industry_comparison" and not plan.regions:
             scope = "전체 지역의 업종 중"
-        return f"{scope}{' ' if scope else ''}{basis_text(plan)} {direction} {n}개 {unit}입니다 ({total}, {when})."
+        return f"{scope.strip()}{' ' if scope.strip() else ''}{basis_text(plan)} {direction} {n}개 {unit}입니다 ({total}, {when})."
     if plan.intent == "region_comparison":
         return f"{'·'.join(plan.regions)} 비교입니다 ({when})." + (
             f" 정렬 기준은 {basis_text(plan)}입니다." if plan.sort_by and n > 1 else "")
@@ -154,6 +174,8 @@ def headline(plan: AnalysisPlan, result: CalcResult, view: RankedView) -> str:
         m = ops[0]
         val = fmt_value(m.op, row.values.get(f"{m.column}.{m.op}"), row.notes, m.column)
         return f"{subj}의 {when} {eun_neun(full_label(m.column, m.op))} {val}입니다."
+    if ops and all(m.op == "ratio" for m in ops):
+        return f"{subj}의 {when} 매출 구성비입니다."
     return f"{subj}의 {when} 성적표입니다."
 
 
@@ -190,6 +212,12 @@ def insights(plan: AnalysisPlan, result: CalcResult, view: RankedView) -> list[s
             hi = max(have, key=lambda r: r.values[key])
             lo = min(have, key=lambda r: r.values[key])
             out.append(f"가장 높은 분기는 {group_label(hi)}, 가장 낮은 분기는 {group_label(lo)}입니다.")
+    rkeys = [k for k in ops if k.endswith(".ratio")]
+    if plan.intent == "lookup" and len(rows) == 1 and len(rkeys) > 1 and len(rkeys) == len(ops):
+        vals = {k: rows[0].values.get(k) for k in rkeys if rows[0].values.get(k) is not None}
+        if vals:
+            top = max(vals, key=vals.get)
+            out.append(f"가장 큰 비중은 {item_label(top.split('.')[0])} {fmt_value('ratio', vals[top], [])}입니다.")
     if plan.intent == "lookup" and len(rows) == 1 and gkey and len(ops) > 1:
         g = rows[0].values.get(gkey)
         if g is not None:

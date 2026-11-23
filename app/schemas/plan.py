@@ -7,7 +7,7 @@ from app.services.areas import load_areas
 
 # 지원 지역 20곳 (data/area_map.csv 의 area_name). 모델 출력 형식(JSON Schema)에도 그대로 들어간다.
 Region = Literal[tuple(load_areas())]  # type: ignore[valid-type]
-AggOp = Literal["sum", "avg", "growth_rate", "per_store"]  # avg=분기당 평균, per_store=점포당 월평균(매출 지표만)
+AggOp = Literal["sum", "avg", "growth_rate", "per_store", "ratio"]  # avg=분기당 평균, per_store=점포당 월평균(매출 지표만), ratio=구성비·점포 비율(C v1.1)
 FilterOp = Literal["eq", "in", "gte", "lte"]
 Comparison = Literal["none", "region", "industry"]
 # 분석 목적: other = 분류 불가/미지원 (재질문 처리)
@@ -88,11 +88,15 @@ class AnalysisPlan(BaseModel):
     rank_order: Literal["desc", "asc"] | None = Field(None, description="여러 행을 정렬하는 방향")
     top_n: int | None = Field(None, description="순위·업종 비교에서 보여 줄 개수 (None이면 전부)")
     sort_by: str | None = Field(None, description="정렬 기준 지표 키 '<컬럼>.<연산>' (예: est_sales.growth_rate)")
-    concept: str | None = Field(None, description="해석한 개념 (overall/size/growth/efficiency/count)")
+    concept: str | None = Field(None, description="해석한 개념 (overall/size/growth/efficiency/count/composition/location/competition)")
+    disclaimers: list[str] = Field([], description="답변에 반드시 붙일 한계 안내 (예: 추천이 아닌 데이터 순위)")
 
 
 class PlanResponse(BaseModel):
-    status: Literal["ok", "needs_clarification"]
+    # info = 계산 없이 데이터 자체를 설명하는 답 (출처·기준일·추정매출 뜻 등). info_text 에 들어 있다.
+    status: Literal["ok", "needs_clarification", "info"]
+    info_text: str | None = None
+    info_topic: str | None = None
     plan: AnalysisPlan | None = None
     missing_fields: list[str] = []  # missing_conditions + missing_columns
     missing_conditions: list[str] = Field([], description="질문에서 부족한 분석 조건: region/industry/period/metric/analysis_type")

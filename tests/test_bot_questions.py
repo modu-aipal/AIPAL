@@ -179,7 +179,7 @@ def test_per_store_only_on_sales_columns():
 # ---------------------------------------------------------------- 막힐 때: 이유 + 서버가 검증한 제안
 BLOCKED = [
     "성수에서 카페 차리면 괜찮을까?", "건대와 이태원 중 창업하기 좋은 곳은?", "홍대 음식점 월별 매출 보여줘",
-    "주말 매출 비중이 높은 상권은?", "잠실 매출 알려줘", "노량진 매출 알려줘", "성수의 카페 매출 비교",
+    "카페 점포 비중이 높은 상권은?", "잠실 매출 알려줘", "노량진 매출 알려줘", "성수의 카페 매출 비교",
     "2025년 2월 성수 매출", "분석 좀 해줘", "서점 매출 알려줘",
 ]
 
@@ -200,9 +200,58 @@ def test_judgment_suggestions_keep_user_context():
     assert any("성수" in s and "카페" in s for s in r.suggested_questions)
 
 
-def test_ratio_suggests_closest_measure():
-    r = ev("주말 매출 비중이 높은 상권은?")
-    assert "주말 매출이 가장 높은 상권은?" in r.suggested_questions
+def test_unsupported_ratio_suggests_plain_questions():
+    r = ev("카페 점포 비중이 높은 상권은?")
+    assert r.status == "needs_clarification" and r.suggested_questions
+
+
+def okplan(q):
+    r = ev(q)
+    assert r.status == "ok", (q, r.clarification_question)
+    return r.plan
+
+
+def test_weekend_ratio_ranking():
+    p = okplan("주말 매출 비중이 높은 상권은?")
+    assert p.intent == "ranking" and p.metrics[0].column == "weekend_sales" and p.metrics[0].op == "ratio"
+    assert p.sort_by == "weekend_sales.ratio"
+
+
+def test_distribution_for_one_area():
+    p = okplan("한강로는 언제 매출이 몰려?")
+    assert p.intent == "lookup" and len(p.metrics) == 6 and all(m.op == "ratio" for m in p.metrics)
+
+
+def test_closure_rate_uses_store_ratio():
+    p = okplan("폐업률 높은 곳은?")
+    assert p.metrics[0].column == "close_count" and p.metrics[0].op == "ratio"
+
+
+def test_location_question_is_ranking_with_disclaimer():
+    p = okplan("의류의 경우 어디서 장사하는게 좋아?")
+    assert p.intent == "ranking" and p.industries == ["의류"] and p.sort_by == "est_sales.per_store"
+    assert p.disclaimers and "추천이 아닙니다" in p.disclaimers[0]
+
+
+def test_location_question_needs_industry():
+    r = ev("어디서 장사하는게 좋아?")
+    assert r.status == "needs_clarification" and r.suggested_questions
+
+
+def test_competition_question():
+    p = okplan("카페 경쟁이 심한 곳은?")
+    assert p.sort_by == "store_count.avg" and p.disclaimers
+
+
+def test_data_questions_get_info_answer():
+    r = ev("추정매출이 뭐야?")
+    assert r.status == "info" and "보정비율" in r.info_text
+    assert ev("출처가 어디야?").status == "info"
+    assert ev("성수 점포 수 알려줘").status == "ok"
+
+
+def test_unavailable_terms_still_blocked():
+    assert ev("성수 임대료 알려줘").status == "needs_clarification"
 
 
 def test_suggestions_do_not_recurse():

@@ -74,3 +74,20 @@ def parse_top_n(q: str, model_top_n: int | None = None) -> int | None:
 
 def has_place_noun(q: str) -> bool:
     return any(w in q for w in PLACE_NOUNS)
+
+
+# ---- 입지 질문 ("의류는 어디서 장사하는 게 좋아?") 과 경쟁 질문 ----
+_LOC_WHERE = ("어디서", "어디에서", "어디에", "어디가", "어디는", "어디로", "어느 동네", "어느 지역", "어느 상권",
+              "어느 곳", "어느곳", "어디 ")
+_LOC_ACTION = ("장사", "개원", "개업", "창업", "차리", "차릴", "열면", "열어", "오픈", "입점", "가게", "점포", "운영",
+               "하는 게", "하는게", "하면", "하려면", "해야", "좋", "괜찮", "유리", "낫", "추천", "적합", "잘 될", "잘될")
+COMPETITION_WORDS = ("경쟁", "포화", "레드오션")
+
+
+def is_location_question(q: str) -> bool:
+    """'어디서 ~하는 게 좋아?'처럼 장소를 고르는 질문. 특정 지역의 가부 질문('성수에서 차리면 괜찮을까?')은 아니다."""
+    return any(w in q for w in _LOC_WHERE) and any(w in q for w in _LOC_ACTION)
+
+
+def is_competition_question(q: str) -> bool:
+    return any(w in q for w in COMPETITION_WORDS)

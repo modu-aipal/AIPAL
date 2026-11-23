@@ -49,7 +49,7 @@ def rank(plan: AnalysisPlan, result: CalcResult) -> RankedView:
     have = [r for r in rows if r.values.get(key) is not None]
     nodata = len(rows) - len(have)  # 이미 매출이 있는 그룹 중 값을 계산할 수 없는 것
     excluded_small = 0
-    if key.endswith(".growth_rate"):
+    if key.endswith((".growth_rate", ".per_store")):
         sales_key = key.rsplit(".", 1)[0] + ".sum"
         kept = [r for r in have if (r.values.get(sales_key) is None or r.values[sales_key] >= MIN_SALES_FOR_GROWTH)]
         excluded_small = len(have) - len(kept)

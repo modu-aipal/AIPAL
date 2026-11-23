@@ -26,6 +26,8 @@ def check(exp: dict, resp) -> list[str]:
     want = exp.get("status", "ok")
     if resp.status != want:
         return [f"status {resp.status} (기대 {want})"]
+    if want == "info":
+        return [] if resp.info_text else ["info_text 없음"]
     if want == "needs_clarification":
         rc = exp.get("reason_contains")
         text = (resp.reason or "") + " " + (resp.clarification_question or "")
