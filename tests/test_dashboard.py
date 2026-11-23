@@ -141,7 +141,7 @@ def test_clarification_returns_422_without_calc(monkeypatch):
 
     app.dependency_overrides[calc_route._calculator] = lambda: Spy()
     fake_llms(monkeypatch, {"status": "ok", "intent": "other"}, lambda m: "x")
-    r = client.post(URL, json={"question": "홍대 분석 좀"})
+    r = client.post(URL, json={"question": "분석 좀 해줘"})
     d = r.json()["detail"]
     assert r.status_code == 422 and d["error"] == "needs_clarification" and not called
 

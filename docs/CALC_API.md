@@ -206,3 +206,9 @@ B는 이를 HTTP 502 `{"error": "calc_engine_error", "engine_error": {...}}`로 
 - **측정 컬럼**: `est_sales`, `est_count`, `weekday_sales`, `weekend_sales`, `male_sales`, `female_sales` 사용 가능.
 - **응답 `spec_version`**: `"1.0"`, `"1.1"` 모두 허용. B는 `ratio`/`share`를 아직 보내지 않는다(다음 단계).
 - 위 예시 1·2의 `year_month`, `store_count`, 월 단위 기간은 v1.0 당시 예시이며 실제 데이터에서는 위 규칙을 따른다.
+
+## B가 C 엔진에 보내는 지표와 지역 (20곳 확장 후)
+- 지역: `filters`의 `region` 값은 `data/area_map.csv`의 `area_name`(예: `제기동`, `종로1~4가`). 상권 순위 질문은 지역 필터 없이 `group_by: ["region"]`로 20곳을 한 번에 받는다.
+- **점포 수 계열**(`store_count`, `general_store_count`, `franchise_count`)은 분기마다 쌓이는 값이라 여러 분기를 `sum`하면 중복 집계된다. B는 `avg`(분기당 평균)로 보낸다. 개업·폐업(`open_count`, `close_count`)은 `sum`.
+- `per_store`(점포당 월평균 매출)는 매출 컬럼(`*_sales`)에만 쓴다.
+- 기간을 말하지 않으면 B가 **최근 4분기**를 채워서 보낸다(추이는 전체 분기). 최신 분기는 `GET /health`의 `quarters`에서 읽는다.

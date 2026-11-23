@@ -147,7 +147,7 @@ def test_api_analyze_clarification_skips_calc(monkeypatch):
     monkeypatch.setattr(planner.ollama, "chat", fake_chat)
     app.dependency_overrides[calc_route._calculator] = lambda: Spy()
     try:
-        r = client.post("/api/analyze", json={"question": "홍대 분석 좀"})
+        r = client.post("/api/analyze", json={"question": "분석 좀 해줘"})
     finally:
         app.dependency_overrides.clear()
     assert r.json()["status"] == "needs_clarification" and r.json()["calc"] is None

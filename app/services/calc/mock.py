@@ -52,6 +52,8 @@ def _formula(m) -> str:
         return f"sum({m.column})"
     if m.op == "avg":
         return f"sum({m.column}) / (기간 내 분기 수)  # 분기당 평균"
+    if m.op == "per_store":
+        return f"sum({m.column}) / (sum(store_count) × 3)  # 점포당 월평균"
     return (
         f"{GROWTH_FORMULA}; current=sum({m.column}) over current_period, "
         f"baseline=sum({m.column}) over baseline_period; baseline==0 -> null"
@@ -107,6 +109,8 @@ class MockCalculator:
                         notes.append("baseline_zero")
                     else:
                         values[key] = round(((seed % 4000) - 1000) / 10000, 4)
+                elif m.op == "per_store":
+                    values[key] = float((300 + seed % 2000) * 10_000)  # 가짜 값 (300~2,300만 원 규모)
                 elif m.op == "sum":
                     values[key] = float((1000 + seed % 9000) * 1_000_000)  # 가짜 값 (10~100억 원 규모)
                 else:

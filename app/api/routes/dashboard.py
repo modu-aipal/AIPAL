@@ -25,6 +25,7 @@ async def dashboard_analyze(
                 "clarification_question": pr.clarification_question,
                 "missing_fields": pr.missing_fields,
                 "reason": pr.reason,
+                "suggested_questions": pr.suggested_questions,  # 서버가 검증한 '이렇게 물어보세요'
             },
         )
     api = await run_calc(pr.plan, calc)

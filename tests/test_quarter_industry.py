@@ -40,7 +40,8 @@ TREND = {"status": "ok", "intent": "sales_trend", "metrics": [{"column": "est_sa
 # ---------- 데이터셋 메타 ----------
 def test_dataset_meta_matches_engine():
     cols = {c.name: c for c in default_dataset().columns}
-    assert "store_count" not in cols
+    assert {"store_count", "general_store_count", "franchise_count", "open_count", "close_count"} <= set(cols)
+    assert len(cols["region"].allowed_values) == 20  # 대시보드와 같은 20곳
     assert cols["quarter"].dtype == "date" and "year_month" not in cols
     assert {"est_sales", "est_count", "weekend_sales"} <= set(cols)
     assert len(REAL_INDUSTRIES) == 62 and len(set(REAL_INDUSTRIES)) == 62
@@ -114,10 +115,12 @@ def test_model_made_up_period_is_ignored(monkeypatch):
 
 
 # ---------- 점포 수 ----------
-def test_store_count_reported_as_missing_column(monkeypatch):
+def test_store_count_is_supported_as_quarterly_average(monkeypatch):
     b = plan_with(monkeypatch, "성수와 홍대의 카페 점포 수를 비교해줘", {**REGION_CMP, "regions": ["성수", "홍대"]})
-    assert b["status"] == "needs_clarification"
-    assert b["missing_columns"] == ["store_count"] and b["missing_conditions"] == []
+    assert b["status"] == "ok"
+    # 점포 수는 분기마다 쌓이는 값이라 합계가 아니라 분기당 평균으로 보낸다 (C 엔진 정의)
+    assert b["plan"]["metrics"] == [{"column": "store_count", "op": "avg"}]
+    assert "점포 수: 기간 내 분기 평균" in b["plan"]["assumptions"]
 
 
 # ---------- Mock / avg ----------
