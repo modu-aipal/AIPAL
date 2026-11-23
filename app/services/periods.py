@@ -105,7 +105,7 @@ def relative_period(q: str, latest: Quarter) -> tuple[PeriodSpec, str] | None:
     if _LAST_YEAR.search(q):
         y = latest[0] - 1
         return to_period((y, 1), (y, 4)), f"작년({y}년)"
-    if "최근" in q:
+    if any(w in q for w in ("최근", "요즘", "요새", "근래")):
         return last_n(latest, DEFAULT_QUARTERS)
     return None
 

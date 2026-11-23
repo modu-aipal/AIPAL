@@ -11,6 +11,7 @@ def _isolated_settings(monkeypatch):
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("API_KEY", "")
     monkeypatch.setenv("LATEST_QUARTER", "2026Q2")
+    monkeypatch.setenv("EXPLAIN_INTERPRETATION", "true")  # 모델 해석 경로도 테스트한다 (운영 기본은 꺼짐)
     get_settings.cache_clear()
     latest.reset_cache()
     yield

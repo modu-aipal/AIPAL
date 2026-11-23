@@ -1,0 +1,23 @@
+{
+  "_comment": "코드의 알려진 관용 표현 목록(app/services/understand.py)에 없는 말로만 만든 평가 세트. 규칙만으로는 못 풀고, 모델이 의미를 이해해야 통과한다. 모델과 우선순위 설정을 비교하는 데 쓴다.",
+  "cases": [
+    {"id": 101, "tag": "idiom-growth", "q": "급성장한 상권은?", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.growth_rate", "order": "desc", "top_n": 5}},
+    {"id": 102, "tag": "idiom-growth", "q": "치고 올라오는 동네 어디야?", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.growth_rate", "order": "desc"}},
+    {"id": 103, "tag": "idiom-growth", "q": "떡상한 업종 알려줘", "expect": {"intent": "industry_comparison", "primary": "est_sales.growth_rate", "order": "desc", "top_n": 5}},
+    {"id": 104, "tag": "idiom-overall", "q": "강남에서 호황인 업종은?", "expect": {"intent": "industry_comparison", "regions": ["강남"], "primary": "est_sales.sum", "order": "desc", "top_n": 5}},
+    {"id": 105, "tag": "idiom-overall", "q": "성수에서 번창하는 업종", "expect": {"intent": "industry_comparison", "regions": ["성수"], "primary": "est_sales.sum", "order": "desc"}},
+    {"id": 106, "tag": "idiom-overall", "q": "북적이는 상권 TOP 3", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.sum", "order": "desc", "top_n": 3}},
+    {"id": 107, "tag": "idiom-low", "q": "독산에서 침체된 업종", "expect": {"intent": "industry_comparison", "regions": ["독산1동"], "primary": "est_sales.sum", "order": "asc"}},
+    {"id": 108, "tag": "idiom-low", "q": "한산한 동네는 어디?", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.sum", "order": "asc"}},
+    {"id": 109, "tag": "idiom-count", "q": "문 닫는 가게가 많은 동네", "expect": {"intent": "ranking", "regions": [], "primary": "close_count.sum", "order": "desc"}},
+    {"id": 110, "tag": "idiom-count", "q": "새로 문 연 가게가 많은 곳", "expect": {"intent": "ranking", "regions": [], "primary": "open_count.sum", "order": "desc"}},
+    {"id": 111, "tag": "idiom-efficiency", "q": "가게당 매출이 높은 곳", "expect": {"intent": "ranking", "regions": [], "primary": "est_sales.per_store", "order": "desc"}},
+    {"id": 112, "tag": "idiom-efficiency", "q": "가산동은 가게 하나가 한 달에 평균 얼마 벌어?", "expect": {"intent": "lookup", "regions": ["가산동"], "primary": "est_sales.per_store"}},
+    {"id": 113, "tag": "idiom-overall", "q": "신사동에서 돈 좀 버는 업종", "expect": {"intent": "industry_comparison", "regions": ["신사동"], "primary": "est_sales.sum", "order": "desc"}},
+    {"id": 114, "tag": "idiom-overall", "q": "한강로에서 먹고살 만한 업종은?", "expect": {"intent": "industry_comparison", "regions": ["한강로동"], "primary": "est_sales.sum", "order": "desc"}},
+    {"id": 115, "tag": "lookup", "q": "압구정 매출 어느 정도야?", "expect": {"intent": "lookup", "regions": ["압구정동"], "primary": "est_sales.sum"}},
+    {"id": 116, "tag": "compare", "q": "청담이랑 압구정 어디가 더 커?", "expect": {"intent": "region_comparison", "regions": ["청담동", "압구정동"], "primary": "est_sales.sum"}},
+    {"id": 117, "tag": "idiom-overall", "q": "여의도 요즘 어때?", "expect": {"intent": "lookup", "regions": ["여의동"], "period": "last4"}},
+    {"id": 118, "tag": "idiom-growth", "q": "홍대 카페 매출이 확 뛰었어?", "expect": {"intent": "lookup", "regions": ["홍대"], "industries": ["카페"], "primary": "est_sales.growth_rate"}}
+  ]
+}

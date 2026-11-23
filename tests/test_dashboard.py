@@ -93,29 +93,8 @@ def test_sql_returned_only_when_engine_reports_executed_sql(monkeypatch):
 
 
 # ---- text grounding ----
-def test_text_uses_only_calc_numbers_when_model_complies(monkeypatch):
-    def good(m):
-        line = [l for l in facts_of(m).splitlines() if l.startswith("[")][0]
-        return "첫 번째 결과: " + line
-
-    fake_llms(monkeypatch, SINGLE, good)
-    r = client.post(URL, json={"question": "홍대의 음식점 분기별 매출을 보여줘."})
-    assert r.status_code == 200 and "추정매출 합계" in r.json()["text"]
 
 
-def test_invented_number_falls_back_to_template(monkeypatch):
-    calls = []
-
-    def bad(m):
-        calls.append(1)
-        return "홍대 매출은 987654321원으로 성수의 3.7배입니다."
-
-    fake_llms(monkeypatch, SINGLE, bad)
-    r = client.post(URL, json={"question": "홍대의 음식점 분기별 매출을 보여줘."})
-    text = r.json()["text"]
-    assert len(calls) == explain.MAX_ATTEMPTS  # 재시도 후 포기
-    assert "987654321" not in text and "3.7" not in text
-    assert "계산 결과:" in text  # 결정적 템플릿
 
 
 def test_ungrounded_number_detector():
@@ -213,18 +192,6 @@ def test_existing_calc_result_accepts_executed_sql_optional():
     assert isinstance(req, CalcRequest)
 
 
-def test_ranking_judgment_words_rejected(monkeypatch):
-    calls = []
-
-    def ranked(m):
-        calls.append(1)
-        return "홍대가 가장 높고 창업을 추천합니다."
-
-    fake_llms(monkeypatch, SINGLE, ranked)
-    r = client.post(URL, json={"question": "홍대의 음식점 분기별 매출을 보여줘."})
-    assert len(calls) == explain.MAX_ATTEMPTS
-    assert "추천" not in r.json()["text"] and "계산 결과:" in r.json()["text"]
-    assert explain.judgment_words("가장 큰 증가율") == ["가장"]
 
 
 # ---- 엔진 notes 전달 ----
@@ -242,29 +209,8 @@ def _engine_with_notes(notes_by_region):
     return NotedEngine()
 
 
-def test_engine_notes_are_appended_to_text(monkeypatch):
-    notes = {
-        "성수": ["region_dong_count: 4", "industry_group: 카페=커피-음료",
-                "pre_2024_basis_unconfirmed: 2021~2023년 자료의 재산출 여부는 확인 중입니다"],
-        "홍대": ["region_dong_count: 1", "industry_group: 카페=커피-음료",
-                "pre_2024_basis_unconfirmed: 2021~2023년 자료의 재산출 여부는 확인 중입니다"],
-    }
-    app.dependency_overrides[calc_route._calculator] = lambda: _engine_with_notes(notes)
-    fake_llms(monkeypatch, PLAN_OK, lambda m: "비교 결과입니다.")
-    text = client.post(URL, json={"question": "성수와 홍대의 카페 매출을 비교해줘."}).json()["text"]
-    assert text.startswith("비교 결과입니다.")
-    assert "※ 주의: 2021~2023년 자료의 재산출 여부는 확인 중입니다" in text
-    assert text.count("※ 주의") == 1  # 행마다 중복되지 않음
-    assert "성수 4개, 홍대 1개" in text
-    assert "※ 업종 묶음: 카페=커피-음료" in text
 
 
-def test_caveats_added_even_on_template_fallback(monkeypatch):
-    notes = {"성수": ["region_dong_count: 4"], "홍대": ["region_dong_count: 1"]}
-    app.dependency_overrides[calc_route._calculator] = lambda: _engine_with_notes(notes)
-    fake_llms(monkeypatch, PLAN_OK, lambda m: "홍대가 가장 높습니다 99999")
-    text = client.post(URL, json={"question": "성수와 홍대의 카페 매출을 비교해줘."}).json()["text"]
-    assert "계산 결과:" in text and "성수 4개, 홍대 1개" in text
 
 
 def test_baseline_notes_and_mock_note_not_duplicated_as_caveats():
@@ -290,26 +236,107 @@ def test_display_rules_amount_ratio_count():
     assert f("growth_rate", 0.048, [], "est_sales") == "+4.8%"
 
 
-def test_facts_use_display_format_and_text_grounding_follows(monkeypatch):
+
+
+
+
+# ---- 답변 구조: 결론 한 줄 + 목록(코드) + 해석(모델, 검증) + 기준·주의(코드) ----
+import re  # noqa: E402
+
+
+def _ask(question="홍대의 음식점 분기별 매출을 보여줘."):
+    r = client.post(URL, json={"question": question})
+    assert r.status_code == 200, r.text
+    return r.json()["text"].removeprefix(explain.MOCK_PREFIX)  # Mock 접두는 따로 검증한다
+
+
+def test_answer_is_structured_headline_list_interpretation_caveats(monkeypatch):
+    fake_llms(monkeypatch, SINGLE, lambda m: "분기마다 값이 달라지는 흐름입니다.")
+    blocks = _ask().split("\n\n")
+    head, *lines = blocks[0].split("\n")
+    assert "분기별" in head and "추이" in head
+    assert lines and all(l.startswith("• ") for l in lines)  # 분기마다 한 줄
+    assert blocks[1].startswith("→ 가장 높은 분기는")  # 코드가 계산 결과에서 뽑은 관찰
+    assert blocks[2] == "분기마다 값이 달라지는 흐름입니다."  # 모델의 해석(설정으로 켠 경우)
+    assert blocks[-1].startswith("※ 기준:")  # 코드가 붙인 기준
+
+
+def test_numbers_in_list_come_from_calc_not_model(monkeypatch):
     seen = {}
 
     def llm(m):
         seen["facts"] = facts_of(m)
-        return "비교 결과입니다."
+        return "홍대 값은 987654321원입니다."  # 지어낸 숫자
 
-    fake_llms(monkeypatch, PLAN_OK, llm)
-    client.post(URL, json={"question": "성수와 홍대의 카페 매출을 비교해줘."})
-    assert "억 원" in seen["facts"] and "," in seen["facts"]
-    # 원 단위 긴 숫자(소수점 없는 10자리 이상)가 설명 근거에 남아 있지 않아야 함
-    import re
-    assert not re.search(r"\d{1,3}(,\d{3}){3,}(?!\d)", seen["facts"].split("사용 행 수")[0] + "")
+    fake_llms(monkeypatch, SINGLE, llm)
+    text = _ask()
+    assert "987654321" not in text  # 해석은 거부되고
+    assert "억 원" in text.split("\n\n")[0]  # 목록은 계산 결과 그대로
+    assert "계산 결과:" not in text  # 예전처럼 줄줄이 나열하지 않는다
+    assert "억 원" in seen["facts"] and not re.search(r"\d{1,3}(,\d{3}){3,}(?!\d)", seen["facts"])
 
 
-def test_model_must_copy_display_numbers(monkeypatch):
+def test_judgment_words_in_interpretation_are_rejected(monkeypatch):
+    fake_llms(monkeypatch, SINGLE, lambda m: "홍대가 가장 높고 창업을 추천합니다.")
+    text = _ask()
+    assert "추천" not in text and "창업" not in text  # 모델의 문장은 거부된다 (코드가 만든 관찰은 별개)
+    assert text.split("\n\n")[0].count("• ") >= 1  # 목록은 그대로
+
+
+def test_false_negation_is_rejected(monkeypatch):
+    fake_llms(monkeypatch, SINGLE, lambda m: "홍대에서 잘나가는 업종은 없습니다.")
+    text = _ask()
+    assert "없습니다" not in text and text.startswith("홍대")
+
+
+def test_model_interpretation_with_copied_number_is_kept(monkeypatch):
     def llm(m):
-        line = [l for l in facts_of(m).splitlines() if l.startswith("[")][0]
-        return "성수의 값은 " + line.split("합계 ")[1].split(" (")[0] + "입니다."
+        line = [l for l in facts_of(m).splitlines() if l.startswith("•")][0]
+        value = re.search(r"([\d,\.]+억 원)", line).group(1)
+        return f"첫 분기 값은 {value}입니다."
 
-    fake_llms(monkeypatch, PLAN_OK, llm)
-    t = client.post(URL, json={"question": "성수와 홍대의 카페 매출을 비교해줘."}).json()["text"]
-    assert "억 원" in t and "계산 결과:" not in t  # 표시 숫자를 그대로 복사하면 통과
+    fake_llms(monkeypatch, SINGLE, llm)
+    text = _ask()
+    assert "첫 분기 값은" in text  # 숫자를 그대로 복사하면 통과
+
+
+def test_engine_notes_are_appended_to_text(monkeypatch):
+    notes = {
+        "성수": ["region_dong_count: 4", "industry_group: 카페=커피-음료",
+                "pre_2024_basis_unconfirmed: 2021~2023년 자료의 재산출 여부는 확인 중입니다"],
+        "홍대": ["region_dong_count: 1", "industry_group: 카페=커피-음료",
+                "pre_2024_basis_unconfirmed: 2021~2023년 자료의 재산출 여부는 확인 중입니다"],
+    }
+    app.dependency_overrides[calc_route._calculator] = lambda: _engine_with_notes(notes)
+    fake_llms(monkeypatch, PLAN_OK, lambda m: "비교 결과입니다.")
+    text = _ask("성수와 홍대의 카페 매출을 비교해줘.")
+    assert "비교 결과입니다." in text
+    assert "※ 주의: 2021~2023년 자료의 재산출 여부는 확인 중입니다" in text
+    assert text.count("※ 주의") == 1  # 행마다 중복되지 않음
+    assert "※ 성수: 행정동 4개 묶음이라" in text  # C의 지역 주의 문구가 행정동 수를 대신 설명한다
+    assert "지역별 포함 행정동 수" not in text  # 같은 말을 두 번 하지 않는다
+    assert "※ 업종 묶음: 카페=커피-음료" in text
+
+
+def test_caveats_added_even_when_interpretation_is_rejected(monkeypatch):
+    notes = {"성수": ["region_dong_count: 4"], "홍대": ["region_dong_count: 1"]}
+    app.dependency_overrides[calc_route._calculator] = lambda: _engine_with_notes(notes)
+    fake_llms(monkeypatch, PLAN_OK, lambda m: "홍대가 가장 높습니다 99999")
+    text = _ask("성수와 홍대의 카페 매출을 비교해줘.")
+    assert "99999" not in text and "※ 성수: 행정동 4개 묶음이라" in text
+    assert text.split("\n\n")[0].count("• ") == 2  # 두 지역이 목록으로
+
+
+def test_single_value_lookup_does_not_call_the_model_for_interpretation(monkeypatch):
+    calls = []
+
+    async def fake(message, **kw):
+        if kw.get("format") is not None:
+            return "m", json.dumps({"status": "ok", "intent": "other"})
+        calls.append(1)
+        return "m", "쓰이지 않음"
+
+    monkeypatch.setattr(planner.ollama, "chat", fake)
+    monkeypatch.setattr(explain.ollama, "chat", fake)
+    text = _ask("강남 매출 알려줘")
+    assert not calls and text.startswith("강남의 ") and "추정매출 합계는" in text.split("\n")[0]

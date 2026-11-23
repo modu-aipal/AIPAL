@@ -71,3 +71,52 @@ def apply_growth(metrics: list[MetricSpec], q: str) -> list[MetricSpec]:
     if any(m.op == "growth_rate" for m in metrics) or metrics[0].op == "per_store":
         return metrics
     return [MetricSpec(column=metrics[0].column, op="growth_rate"), *metrics[1:]]
+
+
+SALES_OPS = ("sum", "growth_rate", "per_store")  # 매출 규모 · 증가율 · 점포당 월평균
+_PRIMARY_OP = {"overall": "sum", "size": "sum", "growth": "growth_rate", "efficiency": "per_store"}
+
+
+def build_metrics(intent: str, concept: str | None, explicit: list[MetricSpec],
+                  model_metrics: list[MetricSpec], cols: set[str]) -> tuple[list[MetricSpec], str | None]:
+    """개념과 질문 속 지표로 계산할 지표 목록과 정렬 기준(primary)을 정한다. primary 가 첫 번째.
+
+    - 점포·개업·건수처럼 매출이 아닌 지표를 직접 말했으면 그대로 쓴다.
+    - 매출 계열은 순위·업종 비교이거나 '잘나가는(overall)' 개념이면 규모·증가율·점포당 세 가지를 함께 계산해
+      사용자가 '실제로 잘 나가는지' 스스로 판단할 수 있게 한다.
+    """
+    explicit = [normalize_op(m) for m in explicit]
+    if not explicit and any(not is_sales_column(m.column) for m in model_metrics):
+        explicit = list(model_metrics)  # 질문에서는 못 잡았지만 모델이 점포·건수 같은 비매출 지표를 골랐다
+
+    def key(m: MetricSpec) -> str:
+        return f"{m.column}.{m.op}"
+
+    if explicit and any(not is_sales_column(m.column) for m in explicit):
+        return explicit, key(explicit[0])
+    base = next((m.column for m in [*explicit, *model_metrics] if is_sales_column(m.column)), "est_sales")
+    if base not in cols:
+        chosen = explicit or model_metrics
+        return chosen, (key(chosen[0]) if chosen else None)
+    if concept in (None, "none"):  # 개념이 없으면 말한 지표·모델 지표의 연산에서 추정
+        ops = {m.op for m in explicit} | {m.op for m in model_metrics if m.column == base}
+        concept = "efficiency" if "per_store" in ops else "growth" if "growth_rate" in ops else "size"
+    flow = {"closures": "close_count", "openings": "open_count"}.get(concept or "")
+    if flow and flow in cols:  # 폐업·개업은 그 분기에 일어난 수라 합계로 본다
+        m = MetricSpec(column=flow, op="sum")
+        return [m], key(m)
+    if concept == "count":  # '몇 개' 표현인데 지표를 못 잡았다 -> 점포 수
+        if "store_count" in cols:
+            m = MetricSpec(column="store_count", op="avg")
+            return [m], key(m)
+        concept = "size"
+    can_store = "store_count" in cols
+    primary = _PRIMARY_OP.get(concept, "sum")
+    if primary == "per_store" and not can_store:
+        primary = "sum"
+    want_trio = concept == "overall" or intent in ("ranking", "industry_comparison")
+    ops = [primary, *[o for o in SALES_OPS if o != primary]] if want_trio else [primary]
+    if not can_store:
+        ops = [o for o in ops if o != "per_store"]
+    metrics = [MetricSpec(column=base, op=o) for o in ops]
+    return metrics, key(metrics[0])
