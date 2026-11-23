@@ -26,7 +26,7 @@ B의 AI 분석 API가 `POST {CALC_ENGINE_URL}/calculate`로 호출하는 계산 
 main.py       서버 (POST /calculate, GET /health)
 engine.py     규격 v1.0 + v1.1 확장 계산
 data.py       CSV 읽기·검사, 컬럼 카탈로그, 업종 묶음
-data/         region_map.csv, sales_5regions.csv(매출), stores_5regions.csv(점포), answer_key.md
+data/         region_map.csv, sales_areas.csv(매출), stores_areas.csv(점포), answer_key.md
 scripts/      build_dataset.py, build_store_dataset.py, answer_key.py
 tests/
 ```

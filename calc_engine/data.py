@@ -8,8 +8,8 @@ from pathlib import Path
 import pandas as pd
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_DATA = HERE / "data" / "sales_5regions.csv"
-STORE_DATA = HERE / "data" / "stores_5regions.csv"
+DEFAULT_DATA = HERE / "data" / "sales_areas.csv"
+STORE_DATA = HERE / "data" / "stores_areas.csv"
 REGION_MAP = HERE / "data" / "region_map.csv"
 
 DATASET_ID = "commercial_area_v1"
@@ -62,7 +62,7 @@ def load_sales_csv(source) -> pd.DataFrame:
         region_map = pd.read_csv(REGION_MAP, dtype=str)[["지역", "행정동_코드"]]
         df = df.merge(region_map, on="행정동_코드", how="inner")
         if df.empty:
-            raise DataError("지원하는 5개 지역(성수·홍대·건대·강남·이태원)의 행정동이 파일에 없습니다.")
+            raise DataError("지원하는 지역(region_map.csv)의 행정동이 파일에 없습니다.")
         df = df[["지역"] + [c for c in df.columns if c != "지역"]]
     return df
 

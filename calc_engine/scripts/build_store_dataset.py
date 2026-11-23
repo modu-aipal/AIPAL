@@ -1,4 +1,4 @@
-"""점포 원본(행정동별 업종별 점포 CSV 여러 개)에서 region_map.csv의 행정동만 남겨 data/stores_5regions.csv로 저장한다.
+"""점포 원본(행정동별 업종별 점포 CSV 여러 개)에서 region_map.csv의 행정동만 남겨 data/stores_areas.csv로 저장한다.
 
 원본: 서울 열린데이터광장 OA-22172 '서울시 상권분석서비스(점포-행정동)'
 - 공식 파일: 2021~2025년 연도별 zip ('파일내려받기')
@@ -38,7 +38,7 @@ for order, path in enumerate(sys.argv[1:]):
     df = df[df["행정동_코드"].isin(region_map["행정동_코드"])][COLUMNS].copy()
     df["_order"] = order
     frames.append(df)
-    print(f"{Path(path).name}: 8개 동 {len(df)}행, 분기 {df['기준_년분기_코드'].min()}~{df['기준_년분기_코드'].max()}")
+    print(f"{Path(path).name}: 매핑 동 {len(df)}행, 분기 {df['기준_년분기_코드'].min()}~{df['기준_년분기_코드'].max()}")
 raw = pd.concat(frames, ignore_index=True)
 for c in NUMERIC:
     raw[c] = pd.to_numeric(raw[c]).astype("int64")
@@ -60,5 +60,5 @@ missing = set(region_map["행정동_코드"]) - set(out["행정동_코드"])
 if missing:
     sys.exit(f"원본에 없는 행정동 코드: {missing}")
 
-out.to_csv(ROOT / "data" / "stores_5regions.csv", index=False, encoding="utf-8-sig")
+out.to_csv(ROOT / "data" / "stores_areas.csv", index=False, encoding="utf-8-sig")
 print(f"{len(out)}행 저장, 분기 {out['기준_년분기_코드'].min()}~{out['기준_년분기_코드'].max()}")

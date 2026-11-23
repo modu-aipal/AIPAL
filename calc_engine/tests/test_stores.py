@@ -24,9 +24,10 @@ def calc(**body):
 # ---- 데이터 파일 ----
 
 def test_store_data_shape_and_columns():
-    assert st.shape == (16308, 13)
+    assert st.shape == (46445, 13)
     assert st["기준_년분기_코드"].nunique() == 22  # 2021Q1~2026Q2
-    assert set(st["지역"]) == {"성수", "홍대", "건대", "강남", "이태원"}
+    assert st["지역"].nunique() == 20 and st["행정동_코드"].nunique() == 23
+    assert len(st[st["지역"].isin(["성수", "홍대", "건대", "강남", "이태원"])]) == 16308  # 처음 5곳은 늘리기 전과 같음
     assert (st["전체_점포_수"] == st["일반_점포_수"] + st["프랜차이즈_점포_수"]).all()
 
 
@@ -62,6 +63,7 @@ def test_per_store_region_comparison_uses_both_tables():
     _, body = calc(spec_version="1.1", metrics=[{"column": "est_sales", "op": "sum"}, {"column": "store_count", "op": "sum"},
                                                 {"column": "est_sales", "op": "per_store"}],
                    group_by=["region"], period=Q2_26)
+    assert len(body["results"]) == 20
     for r in body["results"]:
         v = r["values"]
         assert v["est_sales.per_store"] == v["est_sales.sum"] / (v["store_count.sum"] * 3)
@@ -86,4 +88,4 @@ def test_per_store_not_allowed_on_store_metric():
 
 
 def test_health_reports_store_rows():
-    assert client.get("/health").json()["store_rows"] == 16308
+    assert client.get("/health").json()["store_rows"] == 46445
