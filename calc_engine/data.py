@@ -9,11 +9,14 @@ import pandas as pd
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_DATA = HERE / "data" / "sales_5regions.csv"
+STORE_DATA = HERE / "data" / "stores_5regions.csv"
 REGION_MAP = HERE / "data" / "region_map.csv"
 
 DATASET_ID = "commercial_area_v1"
-DATA_SOURCE = "서울 열린데이터광장 OA-22175 「서울시 상권분석서비스(추정매출-행정동)」 (서울특별시·서울신용보증재단)"
-DATA_VERSION = "OA-22175 2021Q1~2026Q2 (2021~2025 공식 파일 + 2026Q1·Q2 Sheet 내려받기, 2026-11-19 받음)"
+DATA_SOURCE = ("서울 열린데이터광장 OA-22175 「서울시 상권분석서비스(추정매출-행정동)」, "
+               "OA-22172 「서울시 상권분석서비스(점포-행정동)」 (서울특별시·서울신용보증재단)")
+DATA_VERSION = ("OA-22175·OA-22172 2021Q1~2026Q2 (2021~2025 공식 파일 + 2026Q1·Q2 Sheet 내려받기, "
+                "추정매출 2026-11-19·점포 2026-11-23 받음)")
 
 REQUIRED = ["기준_년분기_코드", "행정동_코드", "행정동_코드_명", "서비스_업종_코드_명", "당월_매출_금액"]
 TEXT_COLUMNS = {"지역", "기준_년분기_코드", "행정동_코드", "행정동_코드_명", "서비스_업종_코드", "서비스_업종_코드_명"}
@@ -91,8 +94,33 @@ DENOMINATORS = {
     "count": ["당월_매출_건수"],
     "gender": ["남성_매출_금액", "여성_매출_금액"],
     "age": [MEASURES[f"age_{k}_sales"][0] for k in _AGES],
+    "store": ["전체_점포_수"],
 }
-UNAVAILABLE = {"store_count": "점포수는 이 데이터(추정매출)에 없습니다. 점포 데이터셋을 추가해야 합니다."}
+UNAVAILABLE: dict[str, str] = {}
+
+# ---- 점포 데이터 (OA-22172) ----
+# 공식 파일의 '점포_수'는 프랜차이즈를 뺀 일반 점포, '유사_업종_점포_수'가 전체 점포.
+# 가공 파일은 Sheet 쪽 이름(일반_점포_수, 전체_점포_수)으로 통일했다 (scripts/build_store_dataset.py).
+STORE_MEASURES = {
+    "store_count": ("전체_점포_수", "store"),
+    "general_store_count": ("일반_점포_수", "store"),
+    "franchise_count": ("프랜차이즈_점포_수", "store"),
+    "open_count": ("개업_점포_수", "store"),
+    "close_count": ("폐업_점포_수", "store"),
+}
+MEASURES.update(STORE_MEASURES)
+
+
+def table_of(family: str) -> str:
+    """지표 묶음이 들어 있는 표: 점포 묶음은 stores, 나머지는 sales"""
+    return "stores" if family == "store" else "sales"
+
+
+def load_store_csv(path: Path = STORE_DATA) -> pd.DataFrame:
+    df = pd.read_csv(path, dtype={"기준_년분기_코드": str, "행정동_코드": str, "서비스_업종_코드": str})
+    for col, _ in STORE_MEASURES.values():
+        df[col] = df[col].astype("int64")
+    return df
 
 
 def industry_groups(df: pd.DataFrame) -> dict[str, list[str]]:

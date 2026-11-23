@@ -66,7 +66,17 @@ def test_b_trend_by_year_month_passes_b_verification():
     assert [r.group["year_month"] for r in result.results] == ["2025Q1", "2025Q2", "2025Q3", "2025Q4"]
 
 
-def test_b_receives_engine_error_for_store_count():
+def test_b_store_count_from_store_data():
+    # 점포 데이터(OA-22172) 연결 후: B 규격의 store_count가 그대로 동작. 사이트 서교동 2025Q4 점포수 8,820
+    result = call_engine(plan(
+        regions=["홍대"], metrics=[MetricSpec(column="store_count", op="sum")], group_by=["region"],
+        period=PeriodSpec(start="2025-10", end="2025-12"),
+    ))
+    assert result.status == "ok"
+    assert result.results[0].values["store_count.sum"] == 8820
+
+
+def test_b_receives_engine_error_for_unknown_column():
     with pytest.raises(CalcEngineError) as e:
-        call_engine(plan(metrics=[MetricSpec(column="store_count", op="sum")]))
+        call_engine(plan(metrics=[MetricSpec(column="profit", op="sum")]))
     assert e.value.error.code == "COLUMN_NOT_FOUND"

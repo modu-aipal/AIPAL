@@ -19,6 +19,7 @@ from calc_engine.data import (
     TIME_ALIASES,
     UNAVAILABLE,
     industry_groups,
+    table_of,
 )
 
 V10_OPS = {"sum", "avg", "growth_rate"}
@@ -28,7 +29,7 @@ GROWTH_FORMULA = "(current - baseline) / baseline"
 # ---------------- 요청 (B의 v1.0 스키마와 같은 모양, op만 v1.1 확장 포함) ----------------
 class Metric(BaseModel):
     column: str
-    op: Literal["sum", "avg", "growth_rate", "ratio", "share"]
+    op: Literal["sum", "avg", "growth_rate", "ratio", "share", "per_store"]
 
 
 class Filter(BaseModel):
@@ -152,11 +153,13 @@ def _formula(m: Metric, source_col: str, denominator: list[str]) -> str:
         return f"sum({m.column}) / 같은 조건 전체 그룹의 sum({m.column})"
     if m.op == "ratio":
         return f"sum({m.column}) / sum({' + '.join(denominator)})"
+    if m.op == "per_store":
+        return f"sum({m.column}) / (sum(store_count) × 3) (점포당 월평균, 분기마다 그 분기 점포 수 × 3개월)"
     return (f"{GROWTH_FORMULA}; current=sum({m.column}) over current_period, "
             f"baseline=sum({m.column}) over baseline_period; baseline==0 -> null")
 
 
-def calculate(df: pd.DataFrame, body: dict) -> tuple[int, dict]:
+def calculate(df: pd.DataFrame, body: dict, stores: pd.DataFrame | None = None) -> tuple[int, dict]:
     """요청 본문(dict) → (HTTP 상태, 응답 dict)."""
     request_id = str(body.get("request_id", "")) if isinstance(body, dict) else ""
     dataset_id = str(body.get("dataset_id", "")) if isinstance(body, dict) else ""
@@ -165,7 +168,7 @@ def calculate(df: pd.DataFrame, body: dict) -> tuple[int, dict]:
             req = CalcRequest.model_validate(body)
         except ValidationError as e:
             raise EngineError("INVALID_REQUEST", f"요청 형식이 규격과 다릅니다: {str(e)[:300]}")
-        return 200, _calculate(df, req)
+        return 200, _calculate({"sales": df, "stores": stores}, req)
     except EngineError as e:
         return HTTP_STATUS.get(e.code, 400), {
             "spec_version": "1.0", "request_id": request_id, "status": "error", "is_mock": False,
@@ -178,33 +181,18 @@ def calculate(df: pd.DataFrame, body: dict) -> tuple[int, dict]:
         }
 
 
-def _calculate(df: pd.DataFrame, req: CalcRequest) -> dict:
-    if req.dataset_id != DATASET_ID:
-        raise EngineError("DATASET_NOT_FOUND", f"데이터셋 없음: {req.dataset_id}", {"dataset_id": req.dataset_id})
-
-    # 지표 검사
-    sources, denominators, families = {}, {}, set()
-    for m in req.metrics:
-        if m.column not in MEASURES:
-            raise _column_error(m.column)
-        col, family = MEASURES[m.column]
-        sources[m.column], denominators[m.column] = col, DENOMINATORS[family]
-        families.add(family)
-        if m.op == "growth_rate" and req.growth is None:
-            raise EngineError("INVALID_REQUEST", "growth_rate에는 growth(current_period, baseline_period)가 필요합니다")
-
-    gcols = [_dimension(g) for g in req.group_by]
-    notes: list[str] = []
-    groups = industry_groups(df)
-
-    # 필터 (요청 그대로 적용, 업종 묶음 이름은 실제 업종으로 펼침)
-    data = df
+def _apply_filters(table: pd.DataFrame, req: CalcRequest, notes: list[str]) -> pd.DataFrame:
+    """요청 필터를 한 표에 그대로 적용한다. 업종 묶음 이름은 그 표의 실제 업종으로 펼친다."""
+    groups = industry_groups(table)
+    data = table
     for f in req.filters:
         values = f.value if isinstance(f.value, list) else [f.value]
         if (f.op == "in") != isinstance(f.value, list):
             raise EngineError("INVALID_REQUEST", f"{f.column}: in은 목록, eq·gte·lte는 값 하나여야 합니다")
         if f.column in MEASURES:
             col = MEASURES[f.column][0]
+            if col not in table.columns:
+                raise EngineError("UNSUPPORTED_OPERATION", f"{f.column}로는 이 지표를 거를 수 없습니다 (다른 표의 컬럼)")
             try:
                 nums = [float(v) for v in values]
             except ValueError:
@@ -220,11 +208,11 @@ def _calculate(df: pd.DataFrame, req: CalcRequest) -> dict:
         if col == "기준_년분기_코드":
             qs = [_norm_quarter(v) for v in values]
             if f.op == "gte":
-                data = data[data["기준_년분기_코드"] >= qs[0]]
+                data = data[data[col] >= qs[0]]
             elif f.op == "lte":
-                data = data[data["기준_년분기_코드"] <= qs[0]]
+                data = data[data[col] <= qs[0]]
             else:
-                data = data[data["기준_년분기_코드"].isin(qs)]
+                data = data[data[col].isin(qs)]
             continue
         if f.op in ("gte", "lte"):
             raise EngineError("UNSUPPORTED_OPERATION", f"{f.column}에는 gte·lte를 쓸 수 없습니다 (분기·숫자 컬럼만)")
@@ -237,59 +225,108 @@ def _calculate(df: pd.DataFrame, req: CalcRequest) -> dict:
                 else:
                     expanded.append(v)
             values = expanded
-        unknown = sorted(set(values) - set(df[col]))
+        unknown = sorted(set(values) - set(table[col]))
         if unknown:
             raise EngineError("INVALID_REQUEST", f"지원 범위 밖 값입니다 ({f.column}): {', '.join(unknown)}",
                               {"column": f.column, "values": unknown})
         data = data[data[col].isin(values)]
+    return data
 
-    all_q = sorted(df["기준_년분기_코드"].unique())
+
+def _calculate(tables: dict, req: CalcRequest) -> dict:
+    if req.dataset_id != DATASET_ID:
+        raise EngineError("DATASET_NOT_FOUND", f"데이터셋 없음: {req.dataset_id}", {"dataset_id": req.dataset_id})
+
+    # 지표 검사: 지표마다 원본 컬럼, 분모, 쓰는 표(sales·stores)를 정한다
+    sources, denominators, families, table_for, used = {}, {}, set(), {}, set()
+    for m in req.metrics:
+        if m.column not in MEASURES:
+            raise _column_error(m.column)
+        col, family = MEASURES[m.column]
+        sources[m.column], denominators[m.column] = col, DENOMINATORS[family]
+        families.add(family)
+        table_for[m.column] = table_of(family)
+        used.add(table_of(family))
+        if m.op == "growth_rate" and req.growth is None:
+            raise EngineError("INVALID_REQUEST", "growth_rate에는 growth(current_period, baseline_period)가 필요합니다")
+        if m.op == "per_store":
+            if family == "store":
+                raise EngineError("UNSUPPORTED_OPERATION", f"{m.column}: per_store는 매출 지표에만 쓸 수 있습니다")
+            used.add("stores")
+    for name in used:
+        if tables.get(name) is None:
+            raise EngineError("INTERNAL_ERROR", f"{name} 데이터가 준비되지 않았습니다")
+
+    gcols = [_dimension(g) for g in req.group_by]
+    notes: list[str] = []
+
+    # 표마다 같은 필터·기간을 적용
+    all_q = sorted(set().union(*(set(tables[n]["기준_년분기_코드"]) for n in used)))
     period_q = quarters_in(req.period, all_q)
-    cur = data[data["기준_년분기_코드"].isin(period_q)]
-    if cur.empty:
+    data, cur, cur_g, base_g = {}, {}, {}, {}
+    base_q = []
+    for name in sorted(used):
+        data[name] = _apply_filters(tables[name], req, notes)
+        cur[name] = data[name][data[name]["기준_년분기_코드"].isin(period_q)]
+        if req.growth:
+            cq = quarters_in(req.growth.current_period, all_q, "growth.current_period")
+            base_q = quarters_in(req.growth.baseline_period, all_q, "growth.baseline_period")
+            cur_g[name] = data[name][data[name]["기준_년분기_코드"].isin(cq)]
+            base_g[name] = data[name][data[name]["기준_년분기_코드"].isin(base_q)]
+    if all(cur[n].empty for n in used):
         raise EngineError("NO_DATA", "조건에 맞는 데이터가 없습니다")
-
-    if req.growth:
-        cur_g = data[data["기준_년분기_코드"].isin(quarters_in(req.growth.current_period, all_q, "growth.current_period"))]
-        base_q = quarters_in(req.growth.baseline_period, all_q, "growth.baseline_period")
-        base_g = data[data["기준_년분기_코드"].isin(base_q)]
 
     # 전체 행에 붙는 안내
     if any(TIME_ALIASES.get(g) for g in req.group_by) or any(TIME_ALIASES.get(f.column) for f in req.filters):
         notes.append("quarter_granularity: 데이터가 분기 단위라 year_month 대신 분기(예: 2025Q4)로 계산했습니다")
     if families & {"gender", "age"}:
         notes.append("excludes_corporate_sales: 성별·연령 매출에는 법인 매출이 빠져 있어 비율의 분모는 성별·연령 합계입니다")
+    if "stores" in used:
+        notes.append("store_count_is_total: 점포 수는 프랜차이즈를 포함한 전체 점포 수입니다 (원본 '유사_업종_점포_수')")
 
-    rows_used = _group_count(cur, gcols)
-    quarter_n = _group_count(cur, gcols, "기준_년분기_코드")
-    dong_n = _group_count(cur, gcols, "행정동_코드") if "지역" in gcols else {}
-    values: dict[tuple, dict] = {k: {} for k in rows_used}
-    row_notes: dict[tuple, list[str]] = {k: [] for k in rows_used}
+    rows_used: dict = {}
+    quarter_n: dict = {}
+    for name in used:
+        for k, v in (_group_count(cur[name], gcols).items() if len(cur[name]) else []):
+            rows_used[k] = rows_used.get(k, 0) + v
+        quarter_n[name] = _group_count(cur[name], gcols, "기준_년분기_코드") if len(cur[name]) else {}
+    dong_src = cur["sales"] if "sales" in used else cur["stores"]
+    dong_n = _group_count(dong_src, gcols, "행정동_코드") if "지역" in gcols and len(dong_src) else {}
+    values: dict = {k: {} for k in rows_used}
+    row_notes: dict = {k: [] for k in rows_used}
 
     for m in req.metrics:
         key = f"{m.column}.{m.op}"
-        s = _group_sum(cur, gcols, [sources[m.column]])
+        name = table_for[m.column]
+        s = _group_sum(cur[name], gcols, [sources[m.column]]) if len(cur[name]) else {}
         if m.op == "sum":
             for k in values:
-                values[k][key] = s[k]
+                values[k][key] = s.get(k, 0.0)
         elif m.op == "avg":
             for k in values:
-                values[k][key] = s[k] / quarter_n[k]
+                n = quarter_n[name].get(k)
+                values[k][key] = s.get(k, 0.0) / n if n else 0.0
         elif m.op == "share":
             total = sum(s.values())
             for k in values:
-                values[k][key] = s[k] / total if total else None
+                values[k][key] = s.get(k, 0.0) / total if total else None
                 if not total:
                     row_notes[k].append("denominator_zero")
         elif m.op == "ratio":
-            d = _group_sum(cur, gcols, denominators[m.column])
+            d = _group_sum(cur[name], gcols, denominators[m.column]) if len(cur[name]) else {}
             for k in values:
-                values[k][key] = s[k] / d[k] if d.get(k) else None
+                values[k][key] = s.get(k, 0.0) / d[k] if d.get(k) else None
                 if not d.get(k):
                     row_notes[k].append("denominator_zero")
+        elif m.op == "per_store":
+            st = _group_sum(cur["stores"], gcols, ["전체_점포_수"]) if len(cur["stores"]) else {}
+            for k in values:
+                values[k][key] = s.get(k, 0.0) / (st[k] * 3) if st.get(k) else None
+                if not st.get(k):
+                    row_notes[k].append("denominator_zero")
         else:  # growth_rate
-            c = _group_sum(cur_g, gcols, [sources[m.column]])
-            b = _group_sum(base_g, gcols, [sources[m.column]])
+            c = _group_sum(cur_g[name], gcols, [sources[m.column]]) if len(cur_g[name]) else {}
+            b = _group_sum(base_g[name], gcols, [sources[m.column]]) if len(base_g[name]) else {}
             for k in values:
                 if not base_q or k not in b:
                     values[k][key] = None
@@ -319,7 +356,7 @@ def _calculate(df: pd.DataFrame, req: CalcRequest) -> dict:
         "dataset_id": req.dataset_id,
         "data_version": DATA_VERSION,
         "data_source": DATA_SOURCE,
-        "rows_used": len(cur),
+        "rows_used": sum(len(cur[n]) for n in used),
         "methods": [{"column": m.column, "op": m.op, "formula": _formula(m, sources[m.column], denominators[m.column])}
                     for m in req.metrics],
         "applied": {

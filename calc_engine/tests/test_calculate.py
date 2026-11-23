@@ -127,7 +127,6 @@ def test_share_sums_to_one():
 # ---- 오류는 규격 형식 (status=error + error 객체) ----
 
 @pytest.mark.parametrize("body, status, code", [
-    ({"metrics": [{"column": "store_count", "op": "sum"}]}, 400, "COLUMN_NOT_FOUND"),
     ({"metrics": [{"column": "profit", "op": "sum"}]}, 400, "COLUMN_NOT_FOUND"),
     ({"metrics": [{"column": "est_sales", "op": "median"}]}, 400, "INVALID_REQUEST"),
     ({"metrics": [{"column": "est_sales", "op": "sum"}], "period": {"start": "2025-02", "end": "2025-12"}}, 400, "INVALID_REQUEST"),
