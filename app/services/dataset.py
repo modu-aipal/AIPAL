@@ -1,10 +1,12 @@
 """기본 데이터셋 메타데이터. C 엔진 실제 데이터 기준 (docs/DATA.md, docs/CALC_API_v1.1.md).
 
-컬럼 구조만 정의하며 실제 수치는 없다.
+컬럼 구조만 정의하며 실제 수치는 없다. 지역 목록과 식별값은 data/area_map.csv 에서 읽는다.
 """
 from app.schemas.plan import ColumnMeta, DatasetMeta
+from app.services.areas import load_areas
 
-REGIONS = ["성수", "홍대", "건대", "강남", "이태원"]
+AREA_IDS = load_areas()  # area_name -> area_id (대시보드 id와 같음)
+REGIONS = list(AREA_IDS)  # 지원 지역 20곳 (엔진이 받는 이름)
 
 # 업종 묶음 이름: B는 이름만 전달하고 실제 업종으로의 펼침은 C 엔진이 수행 (DATA.md 4절, 팀 검토 필요)
 INDUSTRY_GROUPS = ["카페", "음식점", "주점", "편의점", "소매", "의류", "미용"]
@@ -29,9 +31,6 @@ INDUSTRY_ALIASES = {
     "소매점": "소매", "옷가게": "의류", "헤어샵": "미용",
 }
 
-# 대시보드(A)용 지역 식별값 — 표기는 A와 합의 필요 (docs/DASHBOARD_API.md)
-AREA_IDS = {"성수": "seongsu", "홍대": "hongdae", "건대": "geondae", "강남": "gangnam", "이태원": "itaewon"}
-
 
 def area_ids(regions: list[str]) -> str:
     """단일 지역이면 식별값, 복수면 쉼표 연결(임시안), 없으면 빈 문자열."""
@@ -48,6 +47,8 @@ def default_dataset() -> DatasetMeta:
             num("est_sales"), num("est_count"),
             num("weekday_sales"), num("weekend_sales"),
             num("male_sales"), num("female_sales"),
-            # store_count: 이 데이터에는 점포 수가 없다 (COLUMN_NOT_FOUND)
+            # 점포 지표 (OA-22172). 점포 수는 프랜차이즈를 포함한 전체
+            num("store_count"), num("general_store_count"), num("franchise_count"),
+            num("open_count"), num("close_count"),
         ]
     )

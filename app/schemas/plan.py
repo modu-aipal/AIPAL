@@ -3,12 +3,17 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Region = Literal["성수", "홍대", "건대", "강남", "이태원"]
-AggOp = Literal["sum", "avg", "growth_rate"]
+from app.services.areas import load_areas
+
+# 지원 지역 20곳 (data/area_map.csv 의 area_name). 모델 출력 형식(JSON Schema)에도 그대로 들어간다.
+Region = Literal[tuple(load_areas())]  # type: ignore[valid-type]
+AggOp = Literal["sum", "avg", "growth_rate", "per_store"]  # avg=분기당 평균, per_store=점포당 월평균(매출 지표만)
 FilterOp = Literal["eq", "in", "gte", "lte"]
 Comparison = Literal["none", "region", "industry"]
 # 분석 목적: other = 분류 불가/미지원 (재질문 처리)
-Intent = Literal["region_comparison", "industry_comparison", "sales_trend", "other"]
+Intent = Literal[
+    "lookup", "region_comparison", "industry_comparison", "sales_trend", "ranking", "other"
+]
 
 
 # ---- 데이터셋 메타데이터 (요청으로 전달 가능, 미전달 시 기본값 사용) ----
@@ -70,6 +75,8 @@ class AnalysisPlan(BaseModel):
     filters: list[FilterSpec]
     period: PeriodSpec | None
     time_column: str | None = None
+    assumptions: list[str] = Field([], description="질문에 없어서 기본값으로 가정한 것 (답변에 밝힌다)")
+    rank_order: Literal["desc", "asc"] | None = Field(None, description="ranking 정렬 방향")
 
 
 class PlanResponse(BaseModel):
@@ -80,5 +87,6 @@ class PlanResponse(BaseModel):
     missing_columns: list[str] = Field([], description="필요하지만 데이터셋에 없는 컬럼/지표")
     reason: str | None = None
     clarification_question: str | None = None
+    suggested_questions: list[str] = Field([], description="바로 보낼 수 있는 고친 질문(서버 검증 통과)")
     model: str
     elapsed_ms: int

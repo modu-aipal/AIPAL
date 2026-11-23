@@ -15,11 +15,18 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.1:8b"
     ollama_timeout_seconds: float = 120
+    # 질문 해석(구조화 출력)은 짧아야 정상이다. 넘으면 모델 없이 서버 규칙으로 처리한다.
+    plan_timeout_seconds: float = 30
+    plan_max_tokens: int = 400
+    explain_timeout_seconds: float = 60  # 넘으면 계산 결과를 그대로 나열한 문장으로 대체
+    explain_max_tokens: int = 700
     api_key: str = ""  # A(대시보드) 인증용. 비어 있으면 개발 환경에서만 인증 생략
     calc_engine_url: str = "http://localhost:8100"
     calc_mode: str = "http"  # http(실제 엔진) | mock(개발/테스트 전용)
     calc_timeout_seconds: float = 30
     calc_dataset_id: str = "commercial_area_v1"
+    latest_quarter: str = "2026Q2"  # C 엔진 /health 를 읽지 못할 때 쓰는 최신 분기
+    latest_cache_seconds: int = 300
 
     @property
     def cors_origin_list(self) -> list[str]:

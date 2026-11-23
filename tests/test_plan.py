@@ -48,8 +48,10 @@ def test_plan_clarification(monkeypatch):
     fake_llm(monkeypatch, {"status": "needs_clarification", "missing_fields": ["industry"],
                            "clarification_question": "어떤 업종인가요?"})
     b = client.post("/api/plan", json={"question": "매출 분석해줘"}).json()
+    # 모델이 말한 부족 항목(업종)이 아니라 서버가 판단: "매출"은 알겠는데 지역이 없으므로 지역을 되묻고 제안을 준다
     assert b["status"] == "needs_clarification" and b["plan"] is None
-    assert b["missing_fields"] == ["industry"]
+    assert b["missing_fields"] == ["region"]
+    assert b["suggested_questions"]
 
 
 def test_plan_rejects_unknown_column(monkeypatch):
@@ -150,9 +152,11 @@ def test_unknown_industry_not_guessed(monkeypatch):
     assert "industry" in b["missing_conditions"] and "서점" in b["reason"]
 
 
-def test_missing_industry_asks(monkeypatch):
+def test_missing_industry_defaults_to_all_industries(monkeypatch):
     _, b = ask(monkeypatch, "성수와 홍대의 매출 비교", {**OK, "industries": [], "filters": []})
-    assert b["status"] == "needs_clarification" and b["missing_conditions"] == ["industry"]
+    assert b["status"] == "ok" and b["plan"]["industries"] == []
+    assert "업종: 전체 업종 합계" in b["plan"]["assumptions"]
+    assert not any(f["column"] == "industry" for f in b["plan"]["filters"])
 
 
 def test_region_comparison_needs_two_regions(monkeypatch):
@@ -161,9 +165,10 @@ def test_region_comparison_needs_two_regions(monkeypatch):
 
 
 def test_intent_other_asks_with_reason(monkeypatch):
-    _, b = ask(monkeypatch, "홍대 분석 좀", {"status": "ok", "intent": "other", "metrics": []})
+    _, b = ask(monkeypatch, "분석 좀 해줘", {"status": "ok", "intent": "other", "metrics": []})
     assert b["status"] == "needs_clarification"
     assert b["missing_conditions"] == ["analysis_type"] and b["reason"]
+    assert b["suggested_questions"]
 
 
 def test_empty_intent_rejected(monkeypatch):
@@ -177,11 +182,13 @@ def test_recommendation_unsupported(monkeypatch):
     assert "지원하지 않습니다" in b["reason"] and b["plan"] is None
 
 
-def test_growth_requires_period(monkeypatch):
+def test_growth_without_period_defaults_to_last_4_quarters(monkeypatch):
     p = {"status": "ok", "intent": "industry_comparison", "regions": ["강남"],
          "metrics": [{"column": "est_sales", "op": "sum"}]}
     _, b = ask(monkeypatch, "강남에서 매출이 증가한 업종을 알려줘.", p)
-    assert b["status"] == "needs_clarification" and b["missing_conditions"] == ["period"]
+    assert b["status"] == "ok"
+    assert b["plan"]["period"] == {"start": "2025-07", "end": "2026-06"}  # 최신 분기 2026Q2 기준 최근 4분기
+    assert any("최근 4분기(2025Q3~2026Q2)" in a for a in b["plan"]["assumptions"])
     _, b2 = ask(monkeypatch, "2024년 강남에서 매출이 증가한 업종을 알려줘.", p)
     assert b2["status"] == "ok"
     assert b2["plan"]["metrics"][0]["op"] == "growth_rate"
@@ -200,14 +207,16 @@ def test_monthly_trend_includes_industry_filter(monkeypatch):
 def test_missing_column_split_from_conditions(monkeypatch):
     _, b = ask(monkeypatch, "성수 카페 유동인구 비교", {"status": "needs_clarification",
                "missing_fields": ["유동인구", "period"]})
-    assert b["missing_columns"] == ["유동인구"] and b["missing_conditions"] == ["period"]
+    # 데이터에 없는 항목만 알리고, 서버가 해결할 수 있는 조건(기간)은 되묻지 않는다
+    assert b["missing_columns"] == ["유동인구"] and b["missing_conditions"] == []
 
 
 def test_free_text_model_clarification_falls_back_to_server_rules(monkeypatch):
-    # 모델이 구조화 항목 없이 자유 문장만 반환 -> 서버가 키워드로 intent 추론, 부족한 기간만 재질문
+    # 모델이 구조화 항목 없이 자유 문장만 반환 -> 서버가 키워드로 유형을 추론하고 기본 기간으로 답한다
     _, b = ask(monkeypatch, "강남에서 매출이 증가한 업종을 알려줘.",
                {"status": "needs_clarification", "clarification_question": "증가의 의미가 뭔가요?"})
-    assert b["status"] == "needs_clarification" and b["missing_conditions"] == ["period"]
+    assert b["status"] == "ok" and b["plan"]["intent"] == "industry_comparison"
+    assert b["plan"]["metrics"][0]["op"] == "growth_rate"
 
 
 def test_asking_for_industries_is_industry_comparison(monkeypatch):
