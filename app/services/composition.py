@@ -18,7 +18,7 @@ DAYS = {"mon_sales": "월요일", "tue_sales": "화요일", "wed_sales": "수요
 GENDERS = {"male_sales": "남성", "female_sales": "여성"}
 WEEK = {"weekday_sales": "평일", "weekend_sales": "주말"}
 # 점포 비율: 개업(폐업) 수 ÷ 전체 점포 수 (C 엔진 DENOMINATORS['store'])
-STORE_RATIOS = {"close_count": ("폐업률", "분기 평균 폐업률"), "open_count": ("개업률", "분기 평균 개업률"),
+STORE_RATIOS = {"close_count": ("폐업률", "기간 폐업률"), "open_count": ("개업률", "기간 개업률"),
                 "franchise_count": ("프랜차이즈 비율", "프랜차이즈 점포 비율"),
                 "general_store_count": ("일반 점포 비율", "일반 점포 비율")}
 
@@ -51,7 +51,7 @@ def ratio_short(col: str) -> str:
 
 
 def ratio_full(col: str) -> str:
-    """제목·결론에 쓰는 이름 (예: '주말 매출 비중', '분기 평균 폐업률')."""
+    """제목·결론에 쓰는 이름 (예: '주말 매출 비중', '기간 폐업률')."""
     if col in STORE_RATIOS:
         return STORE_RATIOS[col][1]
     return f"{item_label(col)} 매출 비중"

@@ -641,3 +641,46 @@ def test_startup_question_with_two_areas_compares():
 def test_startup_judgments_stay_blocked(q):
     r = ev(q)
     assert r.status == "needs_clarification" and "지원하지 않습니다" in r.reason
+
+
+# ---------------------------------------------------------------- 설명 문구가 계산 질문을 가로채지 않는다
+HIJACK_QUESTIONS = [
+    "성수 행정동별 매출 보여줘", "강남 최신 분기 매출", "이태원 갱신된 매출 알려줘", "시장 도매형 상권 매출 순위",
+    "신한카드 매출 알려줘", "한강로 출처 매출", "성수 최신 분기 점포 수",
+]
+
+
+@pytest.mark.parametrize("q", HIJACK_QUESTIONS)
+def test_data_facts_do_not_hijack_analysis_questions(q):
+    r = ev(q)
+    assert r.status != "info", q
+
+
+@pytest.mark.parametrize("q", ["최신 분기가 언제야?", "데이터 언제까지 있어?", "데이터 출처가 어디야?", "행정동이 뭐야?",
+                               "추정매출이 뭐야?", "도움말", "성수는 왜 4개 동이야?", "시장 도매형 상권이 뭐야?"])
+def test_data_facts_still_answer_real_questions(q):
+    assert ev(q).status == "info", q
+
+
+def test_clinic_limit_notice_still_shown_with_area():
+    assert ev("강남 피부과 매출 알려줘").status == "info"
+
+
+def test_freshness_text_matches_what_was_verified():
+    r = ev("데이터 기준일이 언제야?")
+    assert "2025년 자료가 공식 2025년 파일과 숫자가 모두 같은" in r.info_text
+    assert "같은 기간의 공식 파일" not in r.info_text
+
+
+def test_rates_text_describes_period_total():
+    r = ev("폐업률이 뭐야?")
+    assert "기간 전체" in r.info_text and "분기 평균" not in r.info_text
+
+
+def test_real_estate_agency_industry_supported():
+    p = okplan("명동 부동산중개업 2026년 2분기 매출")
+    assert p.industries == ["부동산중개업"] and p.regions == ["명동"]
+    assert okplan("명동 부동산 매출 알려줘").industries == ["부동산중개업"]
+    # 업종 이름 속 '개업'이 개업 점포 수 지표로 잡히면 안 된다
+    assert [(m.column, m.op) for m in okplan("명동 부동산중개업 매출").metrics] == [("est_sales", "sum")]
+    assert any(m.column == "open_count" for m in okplan("명동 개업 점포 수").metrics)

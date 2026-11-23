@@ -45,7 +45,7 @@ def infer_metrics(q: str, cols: set[str]) -> list[MetricSpec]:
     if "일반 점포" in q or "일반점포" in q:
         add("general_store_count", "avg")
         specific_store = True
-    if "개업" in q:
+    if "개업" in q.replace("중개업", ""):  # '부동산중개업' 같은 업종 이름 속 '개업'은 개업 점포 수가 아니다
         add("open_count", "sum")
         specific_store = True
     if "폐업" in q:
