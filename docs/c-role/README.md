@@ -1,16 +1,16 @@
-# C 역할 (데이터 · 계산 · 검증) 문서 — 초안
+# C 역할 (데이터 · 계산 · 검증) 문서
 
-> **초안입니다.** 팀 최종 문서(`DevelopDoc/`)로 합칠 때 필요한 부분만 옮겨 쓰면 됩니다. 숫자와 PR 번호는 2026-11-24 팀 레포 `main` 기준으로 다시 확인했습니다.
+> 이 폴더의 TECH_SPEC · WORK_UNITS · FINAL_CHECKLIST는 팀 [`DevelopDoc/`](../../DevelopDoc) 각 문서의 C 절과 같은 내용입니다. 숫자와 PR 번호는 2026-11-24 팀 레포 `main` 기준입니다.
 
 ## C가 맡은 일 한 줄
 **펄이와 대시보드가 보여 주는 숫자가 진짜 데이터에서 나왔는지 책임진다.** AI(LLM)는 숫자를 만들지 않고, C의 계산 엔진만 숫자를 만든다.
 
 ## 문서 안내
-| 문서 | 내용 | 팀 문서로 옮길 곳 |
+| 문서 | 내용 | 팀 문서 위치 |
 |---|---|---|
-| [TECH_SPEC.md](./TECH_SPEC.md) | 계산 엔진(연산·검사·응답), 데이터(출처·정의·지역), 지원/미지원 질문, 테스트 전략 | TECH_SPEC 계산 엔진·데이터 절 |
-| [WORK_UNITS.md](./WORK_UNITS.md) | C 작업 단위 C01~C11, 완료 조건, 근거 PR | WORK_UNITS C 줄 |
-| [FINAL_CHECKLIST.md](./FINAL_CHECKLIST.md) | 테스트 결과표(실패 사례 포함), C 점검 항목, 디버깅 사례, 다른 역할에 넘긴 결함 | FINAL_CHECKLIST 테스트 결과표·Part B·E·사례 3 |
+| [TECH_SPEC.md](./TECH_SPEC.md) | 계산 엔진(연산·검사·응답), 데이터(출처·정의·지역), 지원/미지원 질문, 테스트 전략 | `DevelopDoc/TECH_SPEC.md` C 절 |
+| [WORK_UNITS.md](./WORK_UNITS.md) | C 작업 단위 C01~C11, 완료 조건, 근거 PR | `DevelopDoc/WORK_UNITS.md` C 절 |
+| [FINAL_CHECKLIST.md](./FINAL_CHECKLIST.md) | 테스트 결과표(실패 사례 포함), C 점검 항목, 디버깅 사례, 다른 역할에 넘긴 결함 | `DevelopDoc/FINAL_CHECKLIST.md` C 절 |
 
 이미 있는 자세한 문서는 옮겨 적지 않고 링크로 둔다.
 - 데이터 출처·정의·한계: [`docs/DATA.md`](../DATA.md)
@@ -19,7 +19,7 @@
 - 펄이 검증: [`docs/PEARL_TEST.md`](../PEARL_TEST.md)
 - 실행 방법: [`calc_engine/README.md`](../../calc_engine/README.md)
 
-## README에 넣을 C 부분 (초안)
+## README의 C 부분
 
 ### 기여 — C 이성균
 - 공공데이터 준비와 **정의 확정**: '당월 매출'이 분기 3개월 합계인지 등 애매한 부분을 제공 기관에 문의해 공식 답변으로 확정
