@@ -362,3 +362,31 @@ def test_dashboard_ignores_malformed_history(monkeypatch, bad):
     fake_llms(monkeypatch, {"status": "ok", "intent": "other"}, lambda m: "")
     r = client.post(URL, json={"question": "성수 카페 매출 알려줘", "history": bad})
     assert r.status_code == 200
+
+
+# ---------------------------------------------------------------- 창업 질문: 순위 맥락 + 이어서 물어보기
+def test_dashboard_startup_answer_adds_followups_and_survives_rank_failure(monkeypatch):
+    fake_llms(monkeypatch, {"status": "ok", "intent": "other"}, lambda m: "")
+    r = client.post(URL, json={"question": "성수에서 카페 차리면 괜찮을까?"})
+    assert r.status_code == 200
+    text = r.json()["text"]
+    assert text.startswith("[테스트용 Mock") and "성수 카페는 점포" in text
+    assert "→ 이어서 물어보기:" in text and "추천이 아닙니다" in text
+
+
+def test_dashboard_answer_unchanged_when_rank_call_fails(monkeypatch):
+    fake_llms(monkeypatch, {"status": "ok", "intent": "other"}, lambda m: "")
+    from app.api.routes import dashboard as dash
+
+    real = dash.run_calc
+    calls = {"n": 0}
+
+    async def flaky(plan, calc):
+        calls["n"] += 1
+        if calls["n"] == 2:  # 두 번째(순위 계산)만 실패
+            raise RuntimeError("engine down")
+        return await real(plan, calc)
+
+    monkeypatch.setattr(dash, "run_calc", flaky)
+    r = client.post(URL, json={"question": "성수에서 카페 차리면 괜찮을까?"})
+    assert r.status_code == 200 and "성수 카페는 점포" in r.json()["text"] and "점포당 월평균:" not in r.json()["text"]

@@ -179,6 +179,33 @@ def headline(plan: AnalysisPlan, result: CalcResult, view: RankedView) -> str:
     return f"{subj}의 {when} 성적표입니다."
 
 
+def startup_block(plan: AnalysisPlan, result: CalcResult, view: RankedView, rank=None) -> tuple[str, list[str]] | None:
+    """창업·수입 질문(한 지역·업종 조회)의 답: 결론 한 문장 + 같은 조건에서의 순위 + 증감·합계. 못 만들면 None(기본 형식)."""
+    if len(view.rows) != 1:
+        return None
+    row = view.rows[0]
+    ps, sc = row.values.get("est_sales.per_store"), row.values.get("store_count.avg")
+    if ps is None or sc is None:
+        return None
+    head = (f"{eun_neun(subject(plan))} 점포 {fmt_value('avg', sc, [], 'store_count')}, "
+            f"한 곳당 월평균 매출 {fmt_value('per_store', ps, [])}입니다 ({period_text(plan)}).")
+    lines: list[str] = []
+    if rank is not None:
+        basis = f"{'·'.join(plan.industries)} 기준" if plan.industries else "전체 업종 기준"
+        lines.append(f"• 점포당 월평균: {basis} {rank.total}곳 중 {rank.per_store_rank}위 (높은 순)")
+        lines.append(f"• 점포 수: {basis} {rank.total}곳 중 {rank.store_rank}위 (많은 순)")
+    gr = row.values.get("est_sales.growth_rate")
+    if gr is not None:
+        from app.services.planner import _growth_basis_text  # 지연 import: 증감을 무엇과 비교했는지
+
+        lines.append(f"• 매출 증감: {fmt_value('growth_rate', gr, [])} ({_growth_basis_text(plan.period, plan.growth_basis == 'year_over_year')})"
+                     if plan.period and plan.period.start and plan.period.end else f"• 매출 증감: {fmt_value('growth_rate', gr, [])}")
+    sm = row.values.get("est_sales.sum")
+    if sm is not None:
+        lines.append(f"• 매출 합계: {fmt_value('sum', sm, [], 'est_sales')}")
+    return head, lines
+
+
 def compose_block(plan: AnalysisPlan, result: CalcResult, view: RankedView) -> tuple[str, list[str]]:
     return headline(plan, result, view), list_lines(plan, result, view)
 

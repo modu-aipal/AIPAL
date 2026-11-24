@@ -735,6 +735,7 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         comparison=comparison, filters=filters, period=period, time_column=time_col,
         assumptions=assumptions, concept=concept, disclaimers=disclaimers,
         growth_basis="year_over_year" if yoy else "previous",
+        kind=special,
         # 여러 행을 정렬할 때만 방향·기준을 둔다. 순위·업종 비교는 상위 N개(기본 5)만 보여 준다.
         rank_order=(("asc" if direction == "low" else "desc")
                     if intent in ("ranking", "industry_comparison", "region_comparison") else None),
@@ -763,6 +764,24 @@ async def _ask_model(question: str, ds: DatasetMeta) -> tuple[str, PlanDraft]:
         except (ValueError, ValidationError) as e:
             last_err = str(e)[:300]
     raise PlanOutputError(f"모델 출력이 계획 스키마와 일치하지 않습니다: {last_err}")
+
+
+def verify_questions(candidates: list[str], ds: DatasetMeta, latest: Quarter, limit: int = 3) -> list[str]:
+    """후보 질문 중 서버가 모델 없이 통과(status=ok)하는 것만 최대 limit개. 안내한 질문이 막히는 일이 없게 한다."""
+    out: list[str] = []
+    for q in candidates:
+        q = re.sub(r"\s+", " ", q).strip()
+        if q in out:
+            continue
+        try:
+            r = evaluate(q, _NULL_DRAFT, ds, latest, suggest=False)
+        except (PlanOutputError, PlanValidationError):
+            continue
+        if r.status == "ok":
+            out.append(q)
+        if len(out) == limit:
+            break
+    return out
 
 
 def build_context(history: list[str] | None, ds: DatasetMeta, latest: Quarter) -> PlanContext | None:
