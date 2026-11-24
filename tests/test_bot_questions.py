@@ -984,6 +984,49 @@ def test_follow_up_without_history_behaves_like_before():
     assert a.status == b.status and a.plan.regions == b.plan.regions == ["홍대"] and a.plan.industries == []
 
 
+# ---------------------------------------------------------------- 되물음에 대한 짧은 답 ("카페 매출" -> "성수동")
+def answer(history, q):
+    """서버의 make_plan 과 같은 순서: 되물음에 이은 답이면 앞 질문과 합쳐 읽는다."""
+    merged = planner.clarification_answer(q, history, DS, LATEST)
+    ctx = planner.build_context(clean_history(history)[:-1] if merged else history, DS, LATEST)
+    return merged, planner.evaluate(merged or q, NULL, DS, LATEST, context=ctx)
+
+
+@pytest.mark.parametrize("history,q,region,industry", [
+    (["카페 매출"], "성수동", "성수", "카페"),
+    (["카페 매출"], "성수는?", "성수", "카페"),
+    (["카페 매출"], "성수 알려줘", "성수", "카페"),
+    (["카페 점포당 매출"], "홍대", "홍대", "카페"),
+])
+def test_short_answer_after_clarification_is_merged(history, q, region, industry):
+    merged, r = answer(history, q)
+    assert merged and r.status == "ok", (history, q, r.reason)
+    assert r.plan.regions == [region] and r.plan.industries == [industry]
+
+
+def test_merged_answer_keeps_metric_of_first_question():
+    _, r = answer(["카페 점포당 매출"], "홍대")
+    assert keys(r.plan)[0] == "est_sales.per_store"
+
+
+@pytest.mark.parametrize("history,q", [
+    (["카페 매출"], "강남 한식 매출 알려줘"),   # 이미 완성된 질문
+    (["카페 매출"], "매출 순위 알려줘"),         # 순위를 말했다
+    (["카페 매출"], "추정매출이 뭐야?"),         # 값을 말한 답이 아니다
+    (["성수 카페 매출"], "홍대"),                # 앞 질문이 막히지 않았다
+    ([], "성수동"),                              # 앞 질문이 없다
+    (["성수 매출"], "카페"),                     # 앞 질문이 막히지 않았다
+])
+def test_not_merged_when_not_an_answer_to_clarification(history, q):
+    assert planner.clarification_answer(q, history, DS, LATEST) is None
+
+
+def test_follow_up_after_merged_answer_keeps_industry():
+    # "카페 매출" -> "성수동"(합쳐 읽음) -> "그럼 홍대는?" : 카페가 계속 이어진다
+    p = fplan(["카페 매출", "성수동"], "그럼 홍대는?")
+    assert p.regions == ["홍대"] and p.industries == ["카페"]
+
+
 def test_blocked_history_is_skipped():
     p = fplan(["창업하기 좋은 곳은?", "성수 카페 매출"], "그럼 홍대는?")  # 앞의 막힌 질문은 건너뛴다
     assert p.industries == ["카페"]
@@ -1011,3 +1054,96 @@ def test_clean_history_is_defensive():
 def test_short_industry_names_are_not_silently_dropped(word, industry):
     p = okplan(f"강남 {word} 매출 알려줘")
     assert p.industries == [industry], word  # 인식되지 않으면 '전체 업종 합계'로 조용히 계산되던 문제
+
+# ---------------------------------------------------------------- 예상 질문 점검에서 찾은 문제 수정
+@pytest.mark.parametrize("q,start,end", [
+    ("강남 올해 1분기 매출", "2026-01", "2026-03"),      # 올해 전체가 아니라 말한 분기만
+    ("강남 작년 3분기 매출", "2025-07", "2025-09"),
+    ("강남 작년 3~4분기 매출", "2025-07", "2025-12"),
+    ("강남 올해 상반기 매출", "2026-01", "2026-06"),
+    ("강남 작년 하반기 매출", "2025-07", "2025-12"),
+])
+def test_relative_year_with_quarter(q, start, end):
+    r = planner.evaluate(q, NULL, DS, LATEST)
+    assert r.status == "ok" and (r.plan.period.start, r.plan.period.end) == (start, end)
+
+
+def test_relative_year_quarter_beyond_data_is_clarified():
+    r = planner.evaluate("강남 올해 3분기 매출", NULL, DS, LATEST)
+    assert r.status == "needs_clarification" and "2026년 2분기" in r.reason
+
+
+@pytest.mark.parametrize("q", ["이태원 매출 늘고 있어?", "강남 매출 줄었어?", "홍대 매출 올랐어?", "건대 매출 떨어졌어?"])
+def test_growing_or_shrinking_questions_use_growth(q):
+    r = planner.evaluate(q, NULL, DS, LATEST)
+    assert r.status == "ok" and keys(r.plan)[0] == "est_sales.growth_rate", q
+
+
+def test_many_places_with_industry_ranks_by_store_count():
+    r = planner.evaluate("카페 많은 곳 top 5", NULL, DS, LATEST)
+    p = r.plan
+    assert r.status == "ok" and p.intent == "ranking" and p.sort_by == "store_count.avg" and p.rank_order == "desc" and p.top_n == 5
+    assert any("점포 수 기준" in a for a in p.assumptions)
+    low = planner.evaluate("카페 적은 곳", NULL, DS, LATEST).plan
+    assert low.sort_by == "store_count.avg" and low.rank_order == "asc"
+
+
+def test_many_places_without_industry_is_not_store_count():
+    p = planner.evaluate("사람 많은 곳", NULL, DS, LATEST).plan  # 유동인구 같은 말은 점포 수로 바꾸지 않는다
+    assert p is None or p.sort_by != "store_count.avg"
+
+
+@pytest.mark.parametrize("q", ["건대 술집 위험해?", "홍대 카페 위험하지 않아?", "성수 미용실 위험할까?"])
+def test_risky_expressions_are_danger(q):
+    r = planner.evaluate(q, NULL, DS, LATEST)
+    assert r.status == "ok" and r.plan.kind == "danger", q
+
+
+@pytest.mark.parametrize("q,topic", [
+    ("이 데이터 언제 거야?", "freshness"),
+    ("데이터 언제까지 있어?", "freshness"),
+    ("점포 수에 프랜차이즈도 들어가?", "store_def"),
+    ("프랜차이즈는 점포 수에서 빠져?", "store_def"),
+])
+def test_more_data_fact_phrasings(q, topic):
+    r = planner.evaluate(q, NULL, DS, LATEST)
+    assert r.status == "info" and r.info_topic == topic, q
+
+
+@pytest.mark.parametrize("q", ["성수 점포 수 알려줘", "성수 프랜차이즈 점포 수", "강남 점포 수 순위", "성수 프랜차이즈 비율"])
+def test_store_questions_stay_analysis(q):
+    assert planner.evaluate(q, NULL, DS, LATEST).status == "ok", q
+
+
+@pytest.mark.parametrize("history,q,region,industry,primary", [
+    (["성수 카페 매출"], "점포당으로 보면?", "성수", "카페", "est_sales.per_store"),
+    (["성수 카페 매출"], "그거 말고 점포 수는?", "성수", "카페", "store_count.avg"),
+])
+def test_more_follow_up_phrasings(history, q, region, industry, primary):
+    p = fplan(history, q)
+    assert p.regions == [region] and p.industries == [industry] and keys(p)[0] == primary
+
+
+def test_period_only_answer_follows_up():
+    p = fplan(["성수 카페 매출"], "2025년 4분기")
+    assert p.regions == ["성수"] and p.industries == ["카페"] and (p.period.start, p.period.end) == ("2025-10", "2025-12")
+
+
+def test_ranking_follow_up_keeps_industry_not_region():
+    p = fplan(["성수 카페 매출"], "순위로 보여줘")
+    assert p.intent == "ranking" and p.regions == [] and p.industries == ["카페"]
+
+
+@pytest.mark.parametrize("q", ["2025년 4분기 매출 순위", "강남 매출", "요즘 뜨는 상권은?"])
+def test_new_questions_are_not_follow_ups(q):
+    assert not is_follow_up(q)
+
+
+def test_typo_gets_suggestion_not_guess():
+    r = planner.evaluate("홍데 매출", NULL, DS, LATEST)
+    assert r.status == "needs_clarification" and "'홍대' 말씀이신가요?" in r.reason
+
+
+def test_english_question_gets_korean_guidance():
+    r = planner.evaluate("Hongdae cafe sales", NULL, DS, LATEST)
+    assert r.status == "needs_clarification" and "한국어" in r.clarification_question

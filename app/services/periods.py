@@ -16,6 +16,8 @@ _Q_CODE = re.compile(r"(\d{4})\s*-?\s*Q([1-4])", re.I)
 _REL_YEARS = re.compile(r"(?:최근|지난|최신)\s*(\d+)\s*년")
 _REL_QUARTERS = re.compile(r"(?:최근|지난|최신)\s*(\d+)\s*분기")
 _REL_ONE_Q = re.compile(r"(?:최근|지난|최신|이번)\s*(?:한\s*)?분기")
+_YEAR_Q = re.compile(r"(올해|금년|작년|지난해)\s*([1-4])(?:\s*분기)?(?:\s*[~\-]\s*([1-4]))?\s*분기")
+_YEAR_HALF = re.compile(r"(올해|금년|작년|지난해)\s*(상반기|하반기)")
 _THIS_YEAR = re.compile(r"올해|금년")
 _LAST_YEAR = re.compile(r"작년|지난해")
 
@@ -90,6 +92,16 @@ def explicit_period(q: str) -> PeriodSpec | None:
 
 def relative_period(q: str, latest: Quarter) -> tuple[PeriodSpec, str] | None:
     """'최근 1년', '지난 2분기', '최근 분기', '올해', '작년' -> (기간, 설명). 없으면 None."""
+    m = _YEAR_Q.search(q) or _YEAR_HALF.search(q)
+    if m:  # "올해 1분기", "작년 3~4분기", "올해 상반기" -> 연도 전체가 아니라 말한 분기만
+        y = latest[0] if m.group(1) in ("올해", "금년") else latest[0] - 1
+        if m.re is _YEAR_HALF:
+            a, b = (1, 2) if m.group(2) == "상반기" else (3, 4)
+        else:
+            a, b = int(m.group(2)), int(m.group(3) or m.group(2))
+        if a <= b:
+            span = label((y, a)) if a == b else f"{label((y, a))}~{label((y, b))}"
+            return to_period((y, a), (y, b)), f"{m.group(1)} {m.group(2) + ('분기' if m.re is _YEAR_Q else '')}({span})"
     m = _REL_YEARS.search(q)
     if m and int(m.group(1)) > 0:
         return last_n(latest, int(m.group(1)) * 4)

@@ -351,6 +351,15 @@ def test_dashboard_follow_up_uses_history(monkeypatch):
     assert "이전 질문의" in text and "이어서 적용" in text and "홍대" in text
 
 
+def test_dashboard_short_answer_after_clarification(monkeypatch):
+    fake_llms(monkeypatch, {"status": "ok", "intent": "other"}, lambda m: "")
+    r = client.post(URL, json={"question": "성수동", "history": ["카페 매출"]})
+    assert r.status_code == 200
+    text = r.json()["text"]
+    first = text.split("\n")[0]
+    assert "되물음에 이어 답한 것으로 읽음" in text and "카페" in first and "성수" in first
+
+
 def test_dashboard_without_history_is_unchanged(monkeypatch):
     fake_llms(monkeypatch, {"status": "ok", "intent": "other"}, lambda m: "")
     r = client.post(URL, json={"question": "그럼 홍대는?"})

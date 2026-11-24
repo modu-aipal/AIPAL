@@ -37,6 +37,7 @@ from app.services.metrics import (
     mentions_annual,
     mentions_avg_ticket,
     normalize_op,
+    wants_many_places,
 )
 from app.services.periods import (
     Quarter,
@@ -357,6 +358,17 @@ def _suggestions(kind: str, ctx: dict, ds: DatasetMeta, latest: Quarter) -> list
     return out
 
 
+def typo_hint(question: str, names: list[str]) -> str:
+    """지역 이름과 한 글자만 다른 낱말이 있으면 '혹시 …' 안내 (오타 보정). 지역으로 읽지는 않고 묻기만 한다."""
+    found: list[str] = []
+    for tok in re.findall(r"[가-힣0-9~]{2,}", question):
+        for n in names:
+            seg = tok[:len(n)]
+            if len(seg) == len(n) and len(n) >= 2 and seg != n and sum(a != b for a, b in zip(seg, n)) == 1 and n not in found:
+                found.append(n)
+    return f" 혹시 '{', '.join(found[:2])}' 말씀이신가요?" if found else ""
+
+
 def _clarify(model, conds, cols, reason, hint=None, suggestions=None) -> PlanResponse:
     conds = list(dict.fromkeys(conds))
     cols = list(dict.fromkeys(cols))
@@ -392,6 +404,8 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
     cols = {c.name: c for c in ds.columns}
     draft = draft.model_copy(deep=True)
     region_col, ind_col = cols.get("region"), cols.get("industry")
+    if not re.search(r"[가-힣]", question) and re.search(r"[A-Za-z]{3,}", question):  # 영어 문장 (한글이 전혀 없는 질문)
+        return _clarify(model, ["analysis_type"], [], "한국어 질문만 이해할 수 있어요. 예: 홍대 카페 매출 알려줘, 성수와 홍대의 매출을 비교해줘.")
     has_quarter = _QUARTER_COL in cols
     time_col = next((c.name for c in ds.columns if c.dtype == "date"), None)
 
@@ -586,6 +600,9 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
            if v != "metrics가 비어 있습니다"]  # 모델이 만든 없는 컬럼·잘못된 연산은 숨기지 않고 알린다
     if bad:
         raise PlanValidationError(bad)
+    if not explicit and inds and special is None and wants_many_places(question) and "store_count" in cols:
+        explicit = [MetricSpec(column="store_count", op="avg")]  # "카페 많은 곳" -> 매출이 아니라 점포 수 기준
+        assumptions.append("'많은·적은'은 점포 수 기준으로 봤어요")
     if not explicit and not model_metrics and concept is None and special is None and "est_sales" in cols:
         assumptions.append("지표: 추정매출")
     metrics, sort_key = build_metrics(intent, concept, explicit, model_metrics, set(cols))
@@ -669,7 +686,7 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
     if region_col is not None:
         if intent in ("lookup", "sales_trend") and not regions and not wants_total:
             return clarify("no_area", ["region"],
-                           reason=f"어느 지역인지 알 수 없습니다. 지원하는 지역은 {', '.join(names)}입니다.")
+                           reason=f"어느 지역인지 알 수 없습니다.{typo_hint(question, list(names))} 지원하는 지역은 {', '.join(names)}입니다.")
         if intent == "region_comparison" and len(regions) < 2:
             if regions:
                 return clarify("need_more", ["region"], reason="비교하려면 지역이 2곳 이상 필요합니다.")
@@ -694,6 +711,9 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         rel = relative_period(YOY_RE.sub("", question), latest)  # "작년 같은 분기 대비"의 '작년'을 기간으로 읽지 않는다
         if rel:
             period = rel[0]
+            if (period.end or "") > f"{latest[0]}-{latest[1] * 3:02d}" or (period.start or "9999") < "2021-01":  # "올해 3분기" 등
+                return clarify("bad_period", ["period"], extra={"year": str(latest[0])}, reason=(
+                    f"데이터는 2021년 1분기부터 {latest[0]}년 {latest[1]}분기까지입니다. 이 기간 안에서 물어봐 주세요."))
             period_stated = True
             assumptions.append(f"기간: {rel[1]}")
         elif follow and context.period is not None and not yoy:
@@ -788,10 +808,13 @@ def build_context(history: list[str] | None, ds: DatasetMeta, latest: Quarter) -
     """직전 질문들을 오래된 순으로 같은 규칙(모델 없이)으로 다시 읽어, 마지막으로 성공한 계획의 조건을 꺼낸다.
     막힌 질문·설명 질문은 건너뛴다. 앞 질문이 또 이어 묻기였으면 그 앞 조건을 이어받은 채로 읽는다."""
     context: PlanContext | None = None
+    seen: list[str] = []
     for h in clean_history(history):
         out: dict = {}
+        text = clarification_answer(h, seen, ds, latest) or h  # 되물음에 이어 답한 질문은 앞 질문과 합쳐 읽는다
+        seen.append(h)
         try:
-            r = evaluate(h, _NULL_DRAFT, ds, latest, suggest=False, context=context, ctx_out=out)
+            r = evaluate(text, _NULL_DRAFT, ds, latest, suggest=False, context=context, ctx_out=out)
         except (PlanOutputError, PlanValidationError):
             continue
         if r.status != "ok" or r.plan is None:
@@ -803,9 +826,56 @@ def build_context(history: list[str] | None, ds: DatasetMeta, latest: Quarter) -
     return context
 
 
+_ANSWER_MAX_CHARS = 14  # "성수동", "성수로 해줘" 정도의 짧은 답만 되물음에 대한 답으로 본다
+_ANSWER_MAX_TOKENS = 3
+
+
+def clarification_answer(question: str, history: list[str] | None, ds: DatasetMeta, latest: Quarter) -> str | None:
+    """직전 질문이 지역·업종이 빠져 막혔고 지금 입력이 그 빠진 값만 짧게 말한 답이면, 두 질문을 이은 문장을 돌려준다.
+
+    예: "카페 매출"(지역을 되물음) 다음 "성수동" -> "카페 매출 성수동". 같은 규칙으로 다시 읽으므로 새 규칙이 늘지 않는다.
+    애매하면 None (그때는 지금 입력을 새 질문으로 처리한다)."""
+    hist = clean_history(history)
+    q = question.strip()
+    if not hist or len(q) > _ANSWER_MAX_CHARS or len(q.split()) > _ANSWER_MAX_TOKENS:
+        return None
+    cols = {c.name: c for c in ds.columns}
+    region_col, ind_col = cols.get("region"), cols.get("industry")
+    names = region_col.allowed_values if region_col is not None and region_col.allowed_values else REGIONS
+    am = find_areas(q, list(names)) if region_col is not None else AreaMatch()
+    inds = find_industries(q, ind_col.allowed_values or []) if ind_col is not None and ind_col.allowed_values else []
+    if (not am.found and not inds) or am.ambiguous or infer_metrics(q, set(cols)) \
+            or any(w in q for w in _RANK_WORDS) or parse_top_n(q, None) is not None:
+        return None  # 값만 말한 답이 아니다 (지표·순위를 말했거나 아무 값도 없다)
+    last = hist[-1]
+    try:
+        r = evaluate(last, _NULL_DRAFT, ds, latest, suggest=False, context=build_context(hist[:-1], ds, latest))
+    except (PlanOutputError, PlanValidationError):
+        return None
+    missing = set(r.missing_conditions)
+    if r.status != "needs_clarification" or r.missing_columns or not missing or not missing <= {"region", "industry"}:
+        return None
+    if ("region" in missing and not am.found) or ("industry" in missing and not inds):
+        return None  # 되물은 것과 다른 값을 말했다
+    return f"{last} {q}"
+
+
 async def make_plan(question: str, dataset: DatasetMeta | None = None,
                     history: list[str] | None = None) -> tuple[str, PlanResponse | None]:
     ds = dataset or default_dataset()
+    if history:  # 되물음에 대한 짧은 답: 앞 질문과 이어 읽는다 (모델 호출 전에 확인해 시간을 아낀다)
+        latest = await latest_quarter()
+        merged = clarification_answer(question, history, ds, latest)
+        if merged:
+            try:
+                r = evaluate(merged, _NULL_DRAFT, ds, latest, get_settings().ollama_model,
+                             context=build_context(clean_history(history)[:-1], ds, latest))
+            except (PlanOutputError, PlanValidationError):
+                r = None
+            if r is not None and r.status == "ok" and r.plan is not None:
+                last = clean_history(history)[-1]
+                r.plan.assumptions.insert(0, f"되물음에 이어 답한 것으로 읽음: '{last}' + '{question.strip()}'")
+                return get_settings().ollama_model, r
     try:
         model, draft = await _ask_model(question, ds)
     except ollama.OllamaTimeoutError:
