@@ -132,7 +132,7 @@ def list_lines(plan: AnalysisPlan, result: CalcResult, view: RankedView) -> list
             return []  # 결론 문장이 값을 말한다
         if all(m.op == "ratio" for m in ops):  # 구성비 분포: 항목 이름과 비중만
             return [f"• {item_label(m.column)}: {fmt_value('ratio', rows[0].values.get(f'{m.column}.ratio'), rows[0].notes)}"
-                    for m in ops]
+                    for m in ops if m.column not in plan.combine]  # 합친 값은 결론 문장이 말한다
         ordered = sorted(ops, key=lambda m: _ORDER.get(m.op, 3))
         return [f"• {full_label(m.column, m.op)}: "
                 f"{fmt_value(m.op, rows[0].values.get(f'{m.column}.{m.op}'), rows[0].notes, m.column)}" for m in ordered]
@@ -170,6 +170,11 @@ def headline(plan: AnalysisPlan, result: CalcResult, view: RankedView) -> str:
         return f"{subj} 분기별 {full_label(m.column, m.op)} 추이입니다 ({when})."
     # lookup
     row = view.rows[0] if view.rows else None
+    if row is not None and plan.combine and not row.group:  # 야간처럼 두 칸을 더한 값을 결론으로
+        m = next((m for m in ops if m.column in plan.combine), None)
+        if m is not None:
+            val = fmt_value(m.op, row.values.get(f"{m.column}.{m.op}"), row.notes, m.column)
+            return f"{subj}의 {when} {eun_neun(full_label(m.column, m.op))} {val}입니다."
     if row is not None and len(ops) == 1:
         m = ops[0]
         val = fmt_value(m.op, row.values.get(f"{m.column}.{m.op}"), row.notes, m.column)
@@ -240,7 +245,7 @@ def insights(plan: AnalysisPlan, result: CalcResult, view: RankedView) -> list[s
             lo = min(have, key=lambda r: r.values[key])
             out.append(f"가장 높은 분기는 {group_label(hi)}, 가장 낮은 분기는 {group_label(lo)}입니다.")
     rkeys = [k for k in ops if k.endswith(".ratio")]
-    if plan.intent == "lookup" and len(rows) == 1 and len(rkeys) > 1 and len(rkeys) == len(ops):
+    if plan.intent == "lookup" and len(rows) == 1 and len(rkeys) > 1 and len(rkeys) == len(ops) and not plan.combine:
         vals = {k: rows[0].values.get(k) for k in rkeys if rows[0].values.get(k) is not None}
         if vals:
             top = max(vals, key=vals.get)

@@ -399,3 +399,11 @@ def test_dashboard_answer_unchanged_when_rank_call_fails(monkeypatch):
     monkeypatch.setattr(dash, "run_calc", flaky)
     r = client.post(URL, json={"question": "성수에서 카페 차리면 괜찮을까?"})
     assert r.status_code == 200 and "성수 카페는 점포" in r.json()["text"] and "점포당 월평균:" not in r.json()["text"]
+
+def test_dashboard_night_question_shows_combined_night_value(monkeypatch):
+    fake_llms(monkeypatch, {"status": "ok", "intent": "other"}, lambda m: "")
+    r = client.post(URL, json={"question": "이태원 야간(21시~06시) 매출 비중은?"})
+    assert r.status_code == 200
+    text = r.json()["text"]
+    first = text.split("\n")[0]
+    assert "야간(21~06시) 매출 비중은" in first and "밤(21~24시)" in text and "새벽(0~6시)" in text

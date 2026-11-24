@@ -1147,3 +1147,88 @@ def test_typo_gets_suggestion_not_guess():
 def test_english_question_gets_korean_guidance():
     r = planner.evaluate("Hongdae cafe sales", NULL, DS, LATEST)
     assert r.status == "needs_clarification" and "한국어" in r.clarification_question
+
+# ---------------------------------------------------------------- 야간 = 21시~06시 (두 칸 합), 합계의 N곳, 모델이 되읽은 말
+from app.schemas.calc import CalcApplied, CalcMetric, CalcResult, CalcRow  # noqa: E402
+from app.services.combine import apply_combine  # noqa: E402
+from app.services.compose import compose_block  # noqa: E402
+from app.services.ranking import rank as rank_view  # noqa: E402
+
+NIGHT_PARTS = ["time_21_24_sales", "time_00_06_sales"]
+
+
+def _night_result(plan, a, b):
+    ops = [CalcMetric(column=c, op=plan.metrics[0].op) for c in NIGHT_PARTS]
+    row = CalcRow(group={}, values={f"{c}.{plan.metrics[0].op}": v for c, v in zip(NIGHT_PARTS, (a, b))}, rows_used=4)
+    return CalcResult(request_id="r", status="ok", dataset_id="d", data_version="v", data_source="s", rows_used=4,
+                      applied=CalcApplied(columns_used=NIGHT_PARTS, operations=ops, group_by=[], filters=[]), results=[row])
+
+
+@pytest.mark.parametrize("q", ["이태원 야간(21시~06시) 매출 비중은?", "이태원 야간 매출 비중", "이태원 21시~06시 매출 비중은?"])
+def test_night_means_two_time_bands(q):
+    p = planner.evaluate(q, NULL, DS, LATEST).plan
+    assert [m.column for m in p.metrics] == NIGHT_PARTS and p.combine == {"time_night_sales": NIGHT_PARTS}
+    assert any("밤(21~24시)과 새벽(0~6시)" in a for a in p.assumptions)
+
+
+def test_night_ranking_sorts_by_the_combined_value():
+    p = planner.evaluate("야간 매출 비중 높은 상권", NULL, DS, LATEST).plan
+    assert p.intent == "ranking" and p.sort_by == "time_night_sales.ratio" and p.combine
+
+
+@pytest.mark.parametrize("q,col", [("이태원 밤 매출 비중", "time_21_24_sales"), ("이태원 새벽 매출 비중", "time_00_06_sales")])
+def test_other_time_words_keep_their_single_band(q, col):
+    p = planner.evaluate(q, NULL, DS, LATEST).plan
+    assert [m.column for m in p.metrics] == [col] and not p.combine
+
+
+def test_combined_night_value_is_the_sum_of_engine_values_and_shown_with_parts():
+    p = planner.evaluate("이태원 야간(21시~06시) 매출 비중은?", NULL, DS, LATEST).plan
+    res = apply_combine(p, _night_result(p, 0.179, 0.227))
+    assert res.results[0].values["time_night_sales.ratio"] == pytest.approx(0.406)
+    head, lines = compose_block(p, res, rank_view(p, res))
+    assert "야간(21~06시) 매출 비중은 40.6%입니다" in head
+    assert lines == ["• 밤(21~24시): 17.9%", "• 새벽(0~6시): 22.7%"]
+
+
+def test_combined_value_is_none_when_a_part_is_missing():
+    p = planner.evaluate("이태원 야간 매출 비중", NULL, DS, LATEST).plan
+    res = apply_combine(p, _night_result(p, 0.179, None))
+    assert res.results[0].values["time_night_sales.ratio"] is None
+
+
+def test_combine_is_a_noop_for_other_plans():
+    p = planner.evaluate("이태원 밤 매출 비중", NULL, DS, LATEST).plan
+    res = _night_result(p, 0.179, 0.227)
+    n = len(res.applied.operations)
+    assert len(apply_combine(p, res).applied.operations) == n
+
+
+def test_total_with_named_regions_and_count_is_one_combined_value():
+    p = planner.evaluate("2025년 4분기 성수 홍대 강남 이태원 건대 5곳 전체 매출 합계는?", NULL, DS, LATEST).plan
+    assert p.intent == "lookup" and len(p.regions) == 5 and any("합산 값" in a for a in p.assumptions)
+
+
+@pytest.mark.parametrize("q,intent", [
+    ("성수 홍대 강남 이태원 건대 5곳 매출 순위", "region_comparison"),   # 순위 말이 있으면 합계가 아니다
+    ("2025년 4분기 5곳 전체 매출 합계는?", "ranking"),                  # 어느 5곳인지 모르면 상위 5곳
+])
+def test_count_word_is_still_top_n_when_it_cannot_be_a_region_count(q, intent):
+    assert planner.evaluate(q, NULL, DS, LATEST).plan.intent == intent
+
+
+@pytest.mark.parametrize("q,missing", [
+    ("이태원 2025년 4분기 매출은?", ["2025년 4분기 매출"]),
+    ("이태원 2025년 4분기 밤 매출 비중은?", ["2025년 4분기", "밤 매출 비중"]),
+    ("홍대 2025년 4분기 저녁 매출 비중은?", ["2025년", "4분기", "저녁 매출 비중"]),
+])
+def test_model_echoing_understood_terms_as_missing_does_not_block(q, missing):
+    d = PlanDraft(status="needs_clarification", missing_fields=missing)
+    assert planner.evaluate(q, d, DS, LATEST).status == "ok", q
+
+
+@pytest.mark.parametrize("q,missing", [("성수 유동인구 알려줘", ["유동인구"]), ("성수 임대료 얼마야?", ["임대료"])])
+def test_model_flagging_a_really_missing_item_still_blocks(q, missing):
+    d = PlanDraft(status="needs_clarification", missing_fields=missing)
+    r = planner.evaluate(q, d, DS, LATEST)
+    assert r.status == "needs_clarification" and set(missing) <= set(r.missing_fields)

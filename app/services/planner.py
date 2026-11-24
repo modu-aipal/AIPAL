@@ -411,9 +411,20 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
 
     # --- 모델이 재질문을 요청한 경우: 부족 항목을 조건/데이터 컬럼으로 분류 ---
     # 모델이 '데이터에 없는 항목'을 지적해도, 질문에 실제로 나온 말일 때만 인정한다 (지어낸 항목은 무시)
+    # 단, 모델이 질문 속 기간·지역·업종·지표 표현("2025년 4분기 매출")을 '없는 항목'이라고 되읽은 것은 서버 규칙이 이해하는 말이라 무시한다.
+    rc_, ic_ = cols.get("region"), cols.get("industry")
+
+    def rules_understand(term: str) -> bool:
+        return bool(
+            _period_from_question(term) or relative_period(term, latest)
+            or not re.sub(r"[\d\s년월분기상하반올해금작지난최근]+", "", term)  # "4분기", "2025년"처럼 기간 낱말뿐
+            or (rc_ is not None and find_areas(term, list(rc_.allowed_values or REGIONS)).found)
+            or (ic_ is not None and ic_.allowed_values and find_industries(term, ic_.allowed_values))
+            or infer_metrics(term, set(cols)) or detect_composition(term, set(cols)))
+
     model_cols: list[str] = []
     for m in draft.missing_fields:
-        if not _COND_KEYS.get(m.strip().lower()) and m.strip() and m.strip() in question:
+        if not _COND_KEYS.get(m.strip().lower()) and m.strip() and m.strip() in question and not rules_understand(m.strip()):
             model_cols.append(m)
     if draft.status == "needs_clarification" and not (draft.missing_fields or draft.clarification_question):
         raise PlanOutputError("재질문 상태인데 missing_fields/clarification_question이 없습니다")
@@ -505,7 +516,9 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         concept = "efficiency"  # '점포당'이라고 말했으면 모델이 size로 읽어도 점포당이 기준이다
     direction = resolve_direction(question, draft.direction)
     top_n = parse_top_n(question, draft.top_n)
-    rank_cue = (any(w in question for w in _RANK_WORDS) or top_n is not None
+    # "성수 홍대 강남 이태원 건대 5곳 합계"의 5곳은 상위 5개가 아니라 말한 지역의 수다
+    count_only = len(areas) >= 2 and top_n == len(areas) and not any(w in question for w in _RANK_WORDS)
+    rank_cue = (any(w in question for w in _RANK_WORDS) or (top_n is not None and not count_only)
                 or (concept in ("overall", "growth") and has_place_noun(question)))
     intent = _infer_intent(question, len(areas), asks_industry, rank_cue)
     if intent == "other" and draft.intent in _KNOWN_INTENTS:
@@ -606,6 +619,7 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
     if not explicit and not model_metrics and concept is None and special is None and "est_sales" in cols:
         assumptions.append("지표: 추정매출")
     metrics, sort_key = build_metrics(intent, concept, explicit, model_metrics, set(cols))
+    combine: dict[str, list[str]] = {}
     if special == "composition":
         op = "ratio" if comp.ratio else "sum"
         metrics = [MetricSpec(column=c, op=op) for c in comp.columns]
@@ -615,6 +629,10 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
                 metrics.append(MetricSpec(column="est_sales", op="sum"))
         sort_key = f"{comp.columns[0]}.{op}"
         concept = None
+        if comp.combine:  # 야간: 두 칸의 합으로 정렬·표시한다
+            sort_key = f"{next(iter(comp.combine))}.{op}"
+            combine = dict(comp.combine)
+            assumptions.append("야간은 21시~06시로 보고, 밤(21~24시)과 새벽(0~6시) 값을 더했습니다")
         if comp.note:
             assumptions.append(comp.note)
         if compare_total and "est_sales" in cols:
@@ -755,7 +773,7 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         comparison=comparison, filters=filters, period=period, time_column=time_col,
         assumptions=assumptions, concept=concept, disclaimers=disclaimers,
         growth_basis="year_over_year" if yoy else "previous",
-        kind=special,
+        kind=special, combine=combine,
         # 여러 행을 정렬할 때만 방향·기준을 둔다. 순위·업종 비교는 상위 N개(기본 5)만 보여 준다.
         rank_order=(("asc" if direction == "low" else "desc")
                     if intent in ("ranking", "industry_comparison", "region_comparison") else None),

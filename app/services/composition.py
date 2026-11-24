@@ -3,7 +3,7 @@
 계산은 C 엔진의 `ratio`가 한다 (docs/CALC_API_v1.1.md). 여기서는 질문 속 표현이 어느 컬럼을 뜻하는지만 정한다.
 """
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # (컬럼 -> 사람이 읽는 이름). 순서가 곧 화면에 보여 주는 순서다.
 TIME_BANDS = {
@@ -22,8 +22,10 @@ STORE_RATIOS = {"close_count": ("폐업률", "기간 폐업률"), "open_count": 
                 "franchise_count": ("프랜차이즈 비율", "프랜차이즈 점포 비율"),
                 "general_store_count": ("일반 점포 비율", "일반 점포 비율")}
 
+# 두 칸을 더해 보여 주는 값: 야간(21시~06시) = 밤(21~24시) + 새벽(0~6시)  (C 엔진 값 두 개의 합)
+COMBINED = {"time_night_sales": ("야간", "21~06시", ("time_21_24_sales", "time_00_06_sales"))}
 GROUPS = {"time": TIME_BANDS, "age": AGES, "day": DAYS, "gender": GENDERS, "week": WEEK}
-RATIO_COLUMNS = {*TIME_BANDS, *AGES, *DAYS, *GENDERS, *WEEK, *STORE_RATIOS}
+RATIO_COLUMNS = {*TIME_BANDS, *AGES, *DAYS, *GENDERS, *WEEK, *STORE_RATIOS, *COMBINED}
 GROUP_NAME = {"time": "시간대별", "age": "연령대별", "day": "요일별", "gender": "성별", "week": "평일·주말"}
 
 
@@ -32,6 +34,8 @@ def item_label(col: str) -> str:
     if col in TIME_BANDS:
         name, span = TIME_BANDS[col]
         return f"{name}({span})"
+    if col in COMBINED:
+        return f"{COMBINED[col][0]}({COMBINED[col][1]})"
     for g in (AGES, DAYS, GENDERS, WEEK):
         if col in g:
             return g[col]
@@ -44,6 +48,8 @@ def ratio_short(col: str) -> str:
         return STORE_RATIOS[col][0]
     if col in TIME_BANDS:
         return f"{TIME_BANDS[col][0]} 비중"
+    if col in COMBINED:
+        return f"{COMBINED[col][0]} 비중"
     for g in (AGES, DAYS, GENDERS, WEEK):
         if col in g:
             return f"{g[col]} 비중"
@@ -65,6 +71,7 @@ class Composition:
     group: str | None = None
     store: bool = False  # 점포 비율(폐업률 등)
     note: str | None = None  # 답변에 밝힐 해석 (예: 젊은층=20·30대)
+    combine: dict[str, list[str]] = field(default_factory=dict)  # 더해서 보여 줄 값 (예: 야간)
 
 
 _RATIO_WORDS = ("비중", "비율", "퍼센트", "%", "률", "율")
@@ -73,7 +80,7 @@ _AMOUNT_WORDS = ("매출", "금액", "얼마", "규모")
 _TIME_TERMS = (("새벽", "time_00_06_sales"), ("심야", "time_00_06_sales"), ("아침", "time_06_11_sales"),
                ("오전", "time_06_11_sales"), ("출근", "time_06_11_sales"), ("점심", "time_11_14_sales"),
                ("런치", "time_11_14_sales"), ("오후", "time_14_17_sales"), ("낮 시간", "time_14_17_sales"),
-               ("저녁", "time_17_21_sales"), ("퇴근", "time_17_21_sales"), ("야간", "time_21_24_sales"),
+               ("저녁", "time_17_21_sales"), ("퇴근", "time_17_21_sales"),
                ("밤", "time_21_24_sales"))
 _DAY_TERMS = tuple((name, col) for col, name in DAYS.items())
 _GENDER_TERMS = (("남성", "male_sales"), ("남자", "male_sales"), ("여성", "female_sales"), ("여자", "female_sales"))
@@ -82,6 +89,7 @@ _STORE_TERMS = (("폐업률", "close_count"), ("폐업율", "close_count"), ("�
                 ("개업률", "open_count"), ("개업율", "open_count"), ("개업 비율", "open_count"),
                 ("프랜차이즈 비율", "franchise_count"), ("프랜차이즈 비중", "franchise_count"),
                 ("일반 점포 비율", "general_store_count"))
+_NIGHT_RE = re.compile(r"야간|21\s*시\s*[~\-]\s*(?:0?6\s*시|새벽)")  # "야간", "21시~06시"
 _AGE_RE = re.compile(r"(?<!\d)([1-9])0\s*대")
 _AGE_2030 = re.compile(r"(?<!\d)20\s*[·~\-,]?\s*30\s*대?(?!\d|년)")
 _YOUNG = ("젊은", "청년", "MZ")
@@ -153,8 +161,14 @@ def detect_composition(q: str, available: set[str]) -> Composition | None:
         for term, col in terms:
             if term in q:
                 cols.append(col)  # "주중과 주말", "남성과 여성"처럼 둘 다 말했으면 모두 담는다 (keep()이 중복을 없앤다)
+    combine: dict[str, list[str]] = {}
+    if _NIGHT_RE.search(q):  # 야간 = 21시~06시: 밤(21~24시)과 새벽(0~6시) 두 칸의 합
+        for key, (_, _, parts) in COMBINED.items():
+            if all(p in available for p in parts):
+                combine[key] = list(parts)
+                cols += list(parts)
     cols = keep(cols)
     if not cols:
         return None
     # 비중 말이 있으면 구성비, "매출" 같은 금액 말만 있으면 금액 합계, 둘 다 없으면 구성비("저녁 장사 강한 곳")
-    return Composition(cols, ratio=has_ratio or not has_amount, note=note)
+    return Composition(cols, ratio=has_ratio or not has_amount, note=note, combine=combine)

@@ -91,6 +91,8 @@ class AnalysisPlan(BaseModel):
     concept: str | None = Field(None, description="해석한 개념 (overall/size/growth/efficiency/count/composition/location/competition)")
     disclaimers: list[str] = Field([], description="답변에 반드시 붙일 한계 안내 (예: 추천이 아닌 데이터 순위)")
     kind: str | None = Field(None, description="판단·특수 질문의 종류 (startup/income/survival/outlook/compare/location/competition/composition)")
+    combine: dict[str, list[str]] = Field(
+        {}, description="여러 칸을 더해 하나로 보여 줄 값 (이름 컬럼 -> 더할 컬럼들). 예: 야간 = 밤(21~24시) + 새벽(0~6시)")
     growth_basis: Literal["previous", "year_over_year"] = Field(
         "previous", description="증감률 비교 기준: previous=직전 같은 길이 기간, year_over_year=전년 같은 기간")
 
