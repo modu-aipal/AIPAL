@@ -24,6 +24,9 @@ from app.services.dataset import INDUSTRY_ALIASES, REGIONS, default_dataset
 from app.services.latest import latest_quarter
 from app.services.metrics import (
     GROWTH_WORDS,
+    TOTAL_WORDS,
+    YOY_RE,
+    YOY_SAME_QUARTER_RE,
     RATIO_WORDS,
     STOCK_COLUMNS,
     build_metrics,
@@ -44,7 +47,7 @@ from app.services.periods import (
 )
 from app.services import data_facts
 from app.services.judgment import DISCLAIMERS, INVEST_REASON, SUCCESS_REASON, detect_judgment
-from app.services.composition import RATIO_COLUMNS, detect_composition
+from app.services.composition import AGES, GENDERS, RATIO_COLUMNS, detect_composition
 from app.services.understand import (
     has_place_noun,
     is_competition_question,
@@ -212,6 +215,8 @@ def find_industries(question: str, allowed: list[str]) -> list[str]:
 
 
 # ---------------------------------------------------------------- 질문 해석 규칙
+# 모델이 업종으로 잘못 뽑기 쉬운 지표·구분 낱말 ("남성, 여성 매출" -> 업종이 아님)
+_NOT_INDUSTRY = ("남성", "여성", "남자", "여자", "주말", "주중", "평일", "점포", "매출", "폐업", "개업", "건수", "합계", "총매출")
 _MONTHLY_WORDS = ("월별", "월간", "매월", "월 단위", "월단위")
 _TREND_WORDS = ("추이", "추세", "변화", "흐름", "분기별", "변했")
 _RANK_WORDS = ("가장", "제일", "최고", "최대", "높은", "많은", "큰 곳", "낮은", "적은", "상위", "하위", "순위", "순으로", "TOP", "top", "톱")
@@ -250,6 +255,16 @@ def _infer_intent(q: str, n_areas: int, asks_industry: bool, rank_cue: bool = Fa
     if n_areas == 1:
         return "region_comparison" if "비교" in q else "lookup"
     return "other"
+
+
+def _growth_basis_text(period, yoy: bool) -> str:
+    """증감률을 무엇과 비교했는지 (답변에 밝힌다): 직전 같은 길이 기간 또는 전년 같은 기간."""
+    if yoy:
+        return "전년 같은 기간 대비"
+    y1, m1 = (int(x) for x in period.start.split("-"))
+    y2, m2 = (int(x) for x in period.end.split("-"))
+    months = (y2 * 12 + m2) - (y1 * 12 + m1) + 1
+    return "직전 분기 대비" if months == 3 else f"직전 {months // 3}분기 대비" if months % 3 == 0 else "직전 같은 기간 대비"
 
 
 def _adjust_per_store(question: str, intent: str, metrics: list[MetricSpec],
@@ -399,7 +414,8 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
             inds = find_industries(question, allowed)
             # 모델이 질문에 있는 업종어를 뽑았는데 데이터셋에 매핑되지 않으면 추정하지 않음
             unknown_ind = [i for i in draft.industries
-                           if i in question and not _canon_industry(i, allowed) and i not in "".join(inds)]
+                           if i in question and not _canon_industry(i, allowed) and i not in "".join(inds)
+                           and i not in _NOT_INDUSTRY]
         else:
             inds = [i for i in draft.industries if i in question]
     ctx = {"areas": areas, "industries": inds, "weekend": "주말" in question}
@@ -470,6 +486,12 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
     # 지표 표현("매출", "점포 수")은 있는데 지원 지역이 없다 -> 지원하지 않는 지역을 물은 것으로 보고 지역을 안내한다
     if intent == "other" and region_col is not None and (infer_metrics(question, set(cols)) or concept):
         intent = "lookup"
+    # "5곳 합계는?" -> 지역별 값이 아니라 지역을 합친 값 하나 (계산은 엔진이 한다)
+    wants_total = (comp is None and jd is None and not is_comp and not rank_cue
+                   and any(w in question for w in TOTAL_WORDS)
+                   and (len(areas) >= 2 or any(w in question for w in ("전체", "모든", "모두", "전 지역", "전지역"))))
+    if wants_total and intent in ("region_comparison", "ranking", "lookup"):
+        intent = "lookup"
     special = None  # 'composition' | 'location' | 'competition'
     disclaimers: list[str] = []
     if comp is not None:
@@ -477,6 +499,10 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         intent = "lookup" if len(areas) == 1 else "region_comparison" if len(areas) >= 2 else "ranking"
         if "추이" in question or "변화" in question:
             intent = "sales_trend" if areas else intent
+        compare_total = (not comp.ratio and set(comp.columns) <= (set(GENDERS) | set(AGES))
+                         and any(w in question for w in ("총매출", "총 매출", "전체 매출", "전체매출")))
+        if compare_total and not areas:  # "남성+여성 매출이 총매출과 같아?" -> 전체 지역을 합친 값 하나로 비교
+            intent, wants_total = "lookup", True
         if asks_industry and not comp.distribution:  # "주말 장사 잘 되는 업종은?"
             intent = "industry_comparison"
         if comp.distribution and not areas:
@@ -556,6 +582,9 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         concept = None
         if comp.note:
             assumptions.append(comp.note)
+        if compare_total and "est_sales" in cols:
+            metrics.append(MetricSpec(column="est_sales", op="sum"))  # 합이 총매출과 다른 이유(법인 매출)를 보여 주기 위해
+            assumptions.append("성별·연령 매출에는 성별·연령을 알 수 없는 법인 매출이 빠져 있어 합이 총매출과 다릅니다")
         if comp.store and comp.columns[0] == "close_count":
             disclaimers = [DISCLAIMERS["survival" if direction == "low" else "danger"]]
     elif special in ("survival", "danger"):
@@ -587,6 +616,11 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         metrics = _adjust_per_store(question, intent, metrics, assumptions)
         sort_key = sort_key or (f"{metrics[0].column}.{metrics[0].op}" if metrics else None)
 
+    yoy = bool(YOY_RE.search(question))
+    if yoy and not any(m.op == "growth_rate" for m in metrics):  # "전년 대비"는 증감률을 묻는 것
+        metrics.append(MetricSpec(column=next((m.column for m in metrics if is_sales_column(m.column)), "est_sales"),
+                                  op="growth_rate"))
+
     # --- 유형별 구조 ---
     regions = [] if intent == "ranking" else list(areas)
     group_by: list[str] = []
@@ -615,7 +649,7 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
 
     # --- 필수 조건 (지역·지표) ---
     if region_col is not None:
-        if intent in ("lookup", "sales_trend") and not regions:
+        if intent in ("lookup", "sales_trend") and not regions and not wants_total:
             return clarify("no_area", ["region"],
                            reason=f"어느 지역인지 알 수 없습니다. 지원하는 지역은 {', '.join(names)}입니다.")
         if intent == "region_comparison" and len(regions) < 2:
@@ -633,11 +667,18 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
             return clarify("bad_period", ["period"],
                            reason="데이터가 분기 단위라 기간은 분기 경계(예: 2024년 1분기, 2024년)여야 합니다.",
                            extra={"year": (period.start or "")[:4]})
+        first_ym, last_ym = "2021-01", f"{latest[0]}-{latest[1] * 3:02d}"
+        if has_quarter and ((period.start or first_ym) < first_ym or (period.end or last_ym) > last_ym):
+            return clarify("bad_period", ["period"], extra={"year": str(latest[0])}, reason=(
+                f"데이터는 2021년 1분기부터 {latest[0]}년 {latest[1]}분기까지입니다. 이 기간 안에서 물어봐 주세요."))
     elif has_quarter:
-        rel = relative_period(question, latest)
+        rel = relative_period(YOY_RE.sub("", question), latest)  # "작년 같은 분기 대비"의 '작년'을 기간으로 읽지 않는다
         if rel:
             period = rel[0]
             assumptions.append(f"기간: {rel[1]}")
+        elif yoy and YOY_SAME_QUARTER_RE.search(question):  # "전년 같은 분기 대비": 기준은 최근 한 분기
+            period, desc = last_n(latest, 1)
+            assumptions.append(f"기간: {desc}")
         else:
             period, note = default_period(intent, latest)
             if note:
@@ -656,11 +697,16 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         assumptions.insert(1 if intent == "ranking" else 0, "업종: 전체 업종 합계")
     if any(m.column in STOCK_COLUMNS for m in metrics):
         assumptions.append("점포 수: 기간 내 분기 평균")
+    if wants_total and len(areas) >= 2:
+        assumptions.append(f"{'·'.join(areas)} 합산 값입니다 (지역별 값이 아님)")
+    if any(m.op == "growth_rate" for m in metrics) and period and period.start and period.end:
+        assumptions.append("증감 기준: " + _growth_basis_text(period, yoy))
 
     plan = AnalysisPlan(
         intent=intent, regions=regions, industries=inds, metrics=metrics, group_by=group_by,
         comparison=comparison, filters=filters, period=period, time_column=time_col,
         assumptions=assumptions, concept=concept, disclaimers=disclaimers,
+        growth_basis="year_over_year" if yoy else "previous",
         # 여러 행을 정렬할 때만 방향·기준을 둔다. 순위·업종 비교는 상위 N개(기본 5)만 보여 준다.
         rank_order=(("asc" if direction == "low" else "desc")
                     if intent in ("ranking", "industry_comparison", "region_comparison") else None),

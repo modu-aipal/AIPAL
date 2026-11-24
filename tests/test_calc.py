@@ -267,3 +267,14 @@ def test_calc_result_schema_consistency():
         CalcResult(request_id="r", status="ok", dataset_id="d")  # data_version 등 누락
     with pytest.raises(ValueError):
         CalcResult(request_id="r", status="error", dataset_id="d")  # error 누락
+
+
+def test_baseline_for_year_over_year_shifts_twelve_months():
+    from app.schemas.plan import PeriodSpec
+
+    b = baseline_for(PeriodSpec(start="2025-10", end="2025-12"), "year_over_year")
+    assert (b.start, b.end) == ("2024-10", "2024-12")
+    c = baseline_for(PeriodSpec(start="2025-07", end="2026-06"), "year_over_year")
+    assert (c.start, c.end) == ("2024-07", "2025-06")
+    d = baseline_for(PeriodSpec(start="2025-10", end="2025-12"))
+    assert (d.start, d.end) == ("2025-07", "2025-09")  # 기본은 직전 기간
