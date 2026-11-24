@@ -221,7 +221,8 @@ th{color:var(--muted)}
 .pfab{position:absolute;z-index:7;right:calc(var(--rw) + 22px);bottom:78px;border:0;background:none;padding:0;cursor:pointer;color:inherit;transition:right .45s var(--ease),transform .2s var(--ease),opacity .25s}
 .pfab:hover{transform:scale(1.06)}
 /* 펄이 can be dragged anywhere on the map; then it is placed with left/top and the popups follow it */
-.pfab{touch-action:none}
+.pfab{touch-action:none;-webkit-user-select:none;user-select:none}
+.pfab img,.pfab canvas{-webkit-user-drag:none;user-drag:none;pointer-events:none}
 .pfab.free{right:auto;bottom:auto;transition:left .45s var(--ease),top .45s var(--ease),transform .2s var(--ease),opacity .25s}
 .pfab.dragging{transition:none;cursor:grabbing;transform:scale(1.1)}
 .pfab.dragging .bot{filter:drop-shadow(0 14px 18px rgba(0,0,0,.45))}
@@ -1450,7 +1451,7 @@ pFab.addEventListener('pointermove',e=>{if(!pDrag||e.pointerId!==pDrag.id)return
   const b=pDrag.b,x=Math.max(b.L,Math.min(b.R-b.fw,e.clientX-b.mr.left-pDrag.dx)),y=Math.max(b.T,Math.min(b.B-b.fh,e.clientY-b.mr.top-pDrag.dy));
   pFab.style.left=x+'px';pFab.style.top=y+'px';pFree={fx:(x-b.L)/Math.max(1,b.R-b.L-b.fw),fy:(y-b.T)/Math.max(1,b.B-b.T-b.fh)};placePop()});
 const pEnd=e=>{if(!pDrag||e.pointerId!==pDrag.id)return;pDrag=null;if(pMoved){pFab.classList.remove('dragging');pSave()}};
-pFab.addEventListener('pointerup',pEnd);pFab.addEventListener('pointercancel',pEnd);
+pFab.addEventListener('pointerup',pEnd);pFab.addEventListener('dragstart',e=>e.preventDefault());pFab.addEventListener('pointercancel',pEnd);
 pFab.addEventListener('keydown',e=>{const k={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(!k)return;e.preventDefault();
   if(!pFree){const b=pBounds(),r=pFab.getBoundingClientRect();pFree={fx:c01((r.left-b.mr.left-b.L)/Math.max(1,b.R-b.L-b.fw)),fy:c01((r.top-b.mr.top-b.T)/Math.max(1,b.B-b.T-b.fh))}}
   const st=e.shiftKey?.2:.05;pFree={fx:c01(pFree.fx+k[0]*st),fy:c01(pFree.fy+k[1]*st)};placeFab();pSave()});
