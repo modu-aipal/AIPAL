@@ -5,6 +5,7 @@ from app.core.config import get_settings
 from app.schemas.calc import CalcApiResponse
 from app.schemas.plan import AnalysisPlan, PlanRequest, PlanResponse
 from app.services import ollama, planner
+from app.services.combine import apply_combine
 from app.services.calc import (
     MOCK_WARNING,
     CalcIntegrationError,
@@ -33,7 +34,7 @@ def _http_error(e: CalcIntegrationError) -> HTTPException:
 async def run_calc(plan: AnalysisPlan, calc: Calculator) -> CalcApiResponse:
     try:
         req = build_request(plan, get_settings().calc_dataset_id)
-        result = await calc.calculate(req)
+        result = apply_combine(plan, await calc.calculate(req))
     except CalcIntegrationError as e:
         raise _http_error(e) from e
     return CalcApiResponse(

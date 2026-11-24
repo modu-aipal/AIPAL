@@ -1580,6 +1580,35 @@
         ]
       },
       "id": 128
+    },
+    {
+      "q": "이태원 야간(21시~06시) 매출 비중은?",
+      "tag": "composition",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "이태원"
+        ],
+        "primary": "time_21_24_sales.ratio"
+      },
+      "id": 129
+    },
+    {
+      "q": "야간 매출 비중 높은 상권",
+      "tag": "composition",
+      "expect": {
+        "intent": "ranking",
+        "primary": "time_night_sales.ratio"
+      },
+      "id": 130
+    },
+    {
+      "q": "2025년 4분기 성수 홍대 강남 이태원 건대 5곳 전체 매출 합계는?",
+      "tag": "total",
+      "expect": {
+        "intent": "lookup"
+      },
+      "id": 131
     }
   ]
 }

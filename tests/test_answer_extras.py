@@ -103,8 +103,17 @@ def _main_result():
                                            "est_sales.sum": 6.379e10, "est_sales.growth_rate": 0.059}, rows_used=4)])
 
 
+@pytest.fixture
+def no_model(monkeypatch):
+    """답변 문장 테스트는 모델 해석을 빈 값으로 막는다 (실제 Ollama가 없어도 통과해야 한다)."""
+    async def fake_chat(message, **kw):
+        return "m", ""
+
+    monkeypatch.setattr(explain.ollama, "chat", fake_chat)
+
+
 @pytest.mark.anyio
-async def test_answer_has_conclusion_sentence_ranks_followups_and_notice():
+async def test_answer_has_conclusion_sentence_ranks_followups_and_notice(no_model):
     p = plan_for("성수에서 카페 차리면 괜찮을까?")
     rc = compute_ranks(p, _regions_result(REGIONS))
     text, _ = await explain.generate_explanation("q", p, _main_result(), rank_ctx=rc, followups=["다음 질문 하나"])
@@ -119,7 +128,7 @@ async def test_answer_has_conclusion_sentence_ranks_followups_and_notice():
 
 
 @pytest.mark.anyio
-async def test_answer_without_rank_still_has_sentence_and_notice():
+async def test_answer_without_rank_still_has_sentence_and_notice(no_model):
     p = plan_for("성수에서 카페 차리면 괜찮을까?")
     text, _ = await explain.generate_explanation("q", p, _main_result())
     assert text.startswith("성수 카페는 점포 598개") and "점포당 월평균:" not in text and "추천이 아닙니다" in text
