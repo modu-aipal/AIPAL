@@ -15,13 +15,16 @@ def _idx_to_ym(i: int) -> str:
     return f"{i // 12:04d}-{i % 12 + 1:02d}"
 
 
-def baseline_for(period: PeriodSpec) -> PeriodSpec:
-    """현재 기간 직전의 같은 길이(개월) 기간. 예: 2024-01~2024-12 -> 2023-01~2023-12"""
+def baseline_for(period: PeriodSpec, basis: str = "previous") -> PeriodSpec:
+    """비교 기준 기간. previous=현재 기간 직전의 같은 길이(개월) 기간 (예: 2024-01~2024-12 -> 2023-01~2023-12),
+    year_over_year=전년 같은 기간 (예: 2025-10~2025-12 -> 2024-10~2024-12)"""
     if not (period.start and period.end):
         raise CalcRequestError("growth_rate에는 기간(start, end)이 필요합니다")
     s, e = _ym_to_idx(period.start), _ym_to_idx(period.end)
     if e < s:
         raise CalcRequestError("기간의 start가 end보다 늦습니다")
+    if basis == "year_over_year":
+        return PeriodSpec(start=_idx_to_ym(s - 12), end=_idx_to_ym(e - 12))
     n = e - s + 1
     return PeriodSpec(start=_idx_to_ym(s - n), end=_idx_to_ym(s - 1))
 
@@ -38,7 +41,7 @@ def build_request(plan: AnalysisPlan, dataset_id: str, request_id: str | None = 
     if any(m.op == "growth_rate" for m in plan.metrics):
         if plan.period is None:
             raise CalcRequestError("growth_rate에는 기간이 필요합니다")
-        growth = GrowthSpec(current_period=plan.period, baseline_period=baseline_for(plan.period))
+        growth = GrowthSpec(current_period=plan.period, baseline_period=baseline_for(plan.period, plan.growth_basis))
     extended = any(m.op in ("per_store", "ratio") for m in plan.metrics)
     return CalcRequest(
         spec_version="1.1" if extended else "1.0",

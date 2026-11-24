@@ -1214,6 +1214,86 @@
         "intent": "industry_comparison",
         "primary": "weekend_sales.ratio"
       }
+    },
+    {
+      "id": 104,
+      "tag": "pearl",
+      "q": "이태원 2025년 4분기 전년 같은 분기 대비 증감률",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "이태원"
+        ],
+        "primary": "est_sales.growth_rate",
+        "period": {
+          "start": "2025-10",
+          "end": "2025-12"
+        }
+      }
+    },
+    {
+      "id": 105,
+      "tag": "pearl",
+      "q": "이태원 2025년 4분기 작년 대비 매출",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "이태원"
+        ],
+        "metrics_include": [
+          "est_sales.growth_rate"
+        ]
+      }
+    },
+    {
+      "id": 106,
+      "tag": "pearl",
+      "q": "성수와 홍대 매출 합계는?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수",
+          "홍대"
+        ],
+        "primary": "est_sales.sum"
+      }
+    },
+    {
+      "id": 107,
+      "tag": "pearl",
+      "q": "이태원 2025년 4분기 주중 매출과 주말 매출",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "이태원"
+        ],
+        "metrics_include": [
+          "weekday_sales.sum",
+          "weekend_sales.sum"
+        ]
+      }
+    },
+    {
+      "id": 108,
+      "tag": "pearl",
+      "q": "남성 매출과 여성 매출이 총매출과 같아?",
+      "expect": {
+        "intent": "lookup",
+        "metrics_include": [
+          "male_sales.sum",
+          "female_sales.sum",
+          "est_sales.sum"
+        ]
+      }
+    },
+    {
+      "id": 109,
+      "tag": "pearl",
+      "q": "2030년 1분기 강남 매출",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "2021년 1분기"
+      }
     }
   ]
 }

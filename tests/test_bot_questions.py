@@ -853,3 +853,67 @@ def test_ordinary_questions_do_not_trigger_judgment_notices(q):
 def test_industry_word_turns_composition_into_industry_ranking():
     p = okplan("주말 장사 잘 되는 업종은?")
     assert p.intent == "industry_comparison" and p.sort_by == "weekend_sales.ratio"
+
+
+# ---------------------------------------------------------------- C 검증의 미해결 오류 (PEARL_TEST)
+def test_year_over_year_wording_uses_same_quarter_last_year():
+    from app.services.calc.builder import build_request
+
+    p = okplan("이태원 2025년 4분기 전년 같은 분기 대비 증감률")
+    assert p.growth_basis == "year_over_year" and p.period.start == "2025-10" and p.period.end == "2025-12"
+    g = build_request(p, "d").growth
+    assert (g.baseline_period.start, g.baseline_period.end) == ("2024-10", "2024-12")  # 전 분기(2025-07~09)가 아니다
+    assert any("전년 같은 기간 대비" in a for a in p.assumptions)
+
+
+@pytest.mark.parametrize("q", ["이태원 2025년 4분기 작년 대비 매출", "이태원 2025년 4분기 전년 동기 대비 증감률"])
+def test_year_over_year_wording_variants(q):
+    p = okplan(q)
+    assert p.growth_basis == "year_over_year" and any(m.op == "growth_rate" for m in p.metrics)
+
+
+def test_year_over_year_without_period_uses_latest_quarter_not_last_year_range():
+    p = okplan("강남 작년 같은 분기 대비 매출 증감")
+    assert p.growth_basis == "year_over_year" and (p.period.start, p.period.end) == ("2026-04", "2026-06")
+
+
+def test_default_growth_states_what_it_was_compared_with():
+    p = okplan("이태원 2025년 4분기 증감률")
+    assert p.growth_basis == "previous" and any("직전 분기 대비" in a for a in p.assumptions)
+    q = okplan("강남 매출 증가율")
+    assert any("직전 4분기 대비" in a for a in q.assumptions)
+
+
+def test_total_question_returns_one_combined_value():
+    p = okplan("성수와 홍대 매출 합계는?")
+    assert p.intent == "lookup" and p.regions == ["성수", "홍대"] and [m.op for m in p.metrics] == ["sum"]
+    assert p.group_by == [] and any("합산" in a for a in p.assumptions)
+    assert okplan("전체 지역 매출 합계").regions == []
+
+
+def test_weekday_and_weekend_both_answered():
+    p = okplan("이태원 2025년 4분기 주중 매출과 주말 매출")
+    assert {m.column for m in p.metrics} == {"weekday_sales", "weekend_sales"}
+
+
+def test_gender_sum_vs_total_explains_missing_corporate_sales():
+    p = okplan("남성 매출과 여성 매출이 총매출과 같아?")
+    assert p.intent == "lookup" and {m.column for m in p.metrics} == {"male_sales", "female_sales", "est_sales"}
+    assert any("법인" in a for a in p.assumptions)
+
+
+def test_gender_words_are_never_treated_as_unknown_industries():
+    d = PlanDraft(status="ok", intent="other", industries=["남성", "여성"])
+    r = planner.evaluate("남성 매출과 여성 매출이 총매출과 같아?", d, DS, LATEST)
+    assert r.status == "ok"
+
+
+@pytest.mark.parametrize("q", ["2030년 1분기 강남 매출", "2020년 강남 매출", "강남 2026년 3분기 매출"])
+def test_period_outside_data_range_explains_available_range(q):
+    r = ev(q)
+    assert r.status == "needs_clarification" and "2021년 1분기" in r.reason and "2026년 2분기" in r.reason
+    assert r.suggested_questions
+
+
+def test_latest_quarter_itself_is_inside_range():
+    assert okplan("강남 2026년 2분기 매출").period.end == "2026-06"

@@ -152,8 +152,7 @@ def detect_composition(q: str, available: set[str]) -> Composition | None:
     for terms in (_DAY_TERMS, _GENDER_TERMS, _WEEK_TERMS, _TIME_TERMS):
         for term, col in terms:
             if term in q:
-                cols.append(col)
-                break  # 같은 묶음에서는 처음 맞은 것 하나
+                cols.append(col)  # "주중과 주말", "남성과 여성"처럼 둘 다 말했으면 모두 담는다 (keep()이 중복을 없앤다)
     cols = keep(cols)
     if not cols:
         return None

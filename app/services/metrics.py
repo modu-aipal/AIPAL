@@ -47,6 +47,10 @@ def mentions_annual(q: str) -> bool:
 def mentions_avg_ticket(q: str) -> bool:
     return any(w in q for w in AVG_TICKET_WORDS)
 
+# "전년 같은 분기 대비", "작년 대비", "전년 동기" -> 비교 기준을 직전 기간이 아니라 전년 같은 기간으로
+YOY_RE = re.compile(r"(?:전년|작년|지난해)\s*(?:같은\s*(?:분기|기간)|동분기|동기|대비)|YoY|yoy")
+YOY_SAME_QUARTER_RE = re.compile(r"같은\s*분기|동분기|동기")
+TOTAL_WORDS = ("합계", "총합", "다 합", "합쳐", "전체 합", "모두 합")
 RATIO_WORDS = ("비중", "비율", "퍼센트", "개업률", "폐업률")
 
 
