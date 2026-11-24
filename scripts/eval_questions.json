@@ -189,7 +189,7 @@
       "expect": {
         "intent": "ranking",
         "regions": [],
-        "primary": "close_count.sum",
+        "primary": "close_count.ratio",
         "order": "desc",
         "top_n": 5
       }
@@ -503,11 +503,14 @@
     },
     {
       "id": 38,
-      "tag": "blocked",
+      "tag": "judgment",
       "q": "홍대 창업 추천해줘",
       "expect": {
-        "status": "needs_clarification",
-        "reason_contains": "지원하지 않습니다"
+        "intent": "industry_comparison",
+        "regions": [
+          "홍대"
+        ],
+        "primary": "est_sales.per_store"
       }
     },
     {
@@ -1005,6 +1008,211 @@
         "industries": [
           "부동산중개업"
         ]
+      }
+    },
+    {
+      "id": 84,
+      "tag": "judgment",
+      "q": "강남에서 창업하기 좋은 업종은?",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "강남"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 85,
+      "tag": "judgment",
+      "q": "성수에서 어떤 가게를 열면 좋을까?",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "성수"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 86,
+      "tag": "judgment",
+      "q": "카페 창업하기 좋은 곳은?",
+      "expect": {
+        "intent": "ranking",
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 87,
+      "tag": "judgment",
+      "q": "카페 차리기 좋은 동네 추천해줘",
+      "expect": {
+        "intent": "ranking",
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 88,
+      "tag": "judgment",
+      "q": "창업하기 좋은 곳은?",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "업종"
+      }
+    },
+    {
+      "id": 89,
+      "tag": "judgment",
+      "q": "폐업 적은 업종은?",
+      "expect": {
+        "intent": "industry_comparison",
+        "primary": "close_count.ratio",
+        "order": "asc"
+      }
+    },
+    {
+      "id": 90,
+      "tag": "judgment",
+      "q": "망하는 업종은?",
+      "expect": {
+        "intent": "industry_comparison",
+        "primary": "close_count.ratio",
+        "order": "desc"
+      }
+    },
+    {
+      "id": 91,
+      "tag": "judgment",
+      "q": "살아남기 쉬운 업종은?",
+      "expect": {
+        "intent": "industry_comparison",
+        "primary": "close_count.ratio",
+        "order": "asc"
+      }
+    },
+    {
+      "id": 92,
+      "tag": "judgment",
+      "q": "어느 업종이 제일 안정적이야?",
+      "expect": {
+        "intent": "industry_comparison",
+        "primary": "close_count.ratio",
+        "order": "asc"
+      }
+    },
+    {
+      "id": 93,
+      "tag": "judgment",
+      "q": "카페 너무 많은 동네는?",
+      "expect": {
+        "intent": "ranking",
+        "industries": [
+          "카페"
+        ],
+        "primary": "store_count.avg",
+        "order": "desc"
+      }
+    },
+    {
+      "id": 94,
+      "tag": "judgment",
+      "q": "경쟁 적은 곳은?",
+      "expect": {
+        "intent": "ranking",
+        "primary": "store_count.avg",
+        "order": "asc"
+      }
+    },
+    {
+      "id": 95,
+      "tag": "judgment",
+      "q": "성수 카페 사장 수입은?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 96,
+      "tag": "judgment",
+      "q": "성수 카페 앞으로 전망 어때?",
+      "expect": {
+        "intent": "sales_trend",
+        "regions": [
+          "성수"
+        ]
+      }
+    },
+    {
+      "id": 97,
+      "tag": "judgment",
+      "q": "요즘 유망한 업종은?",
+      "expect": {
+        "intent": "industry_comparison",
+        "primary": "est_sales.growth_rate"
+      }
+    },
+    {
+      "id": 98,
+      "tag": "judgment",
+      "q": "카페랑 편의점 중에 뭐가 나아?",
+      "expect": {
+        "intent": "industry_comparison",
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 99,
+      "tag": "judgment",
+      "q": "성수 홍대 중 어디가 나아?",
+      "expect": {
+        "intent": "region_comparison",
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 100,
+      "tag": "judgment",
+      "q": "가장 안전한 투자처는?",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "투자"
+      }
+    },
+    {
+      "id": 101,
+      "tag": "judgment",
+      "q": "성수 카페 성공 확률은?",
+      "expect": {
+        "status": "needs_clarification",
+        "reason_contains": "지원하지 않습니다"
+      }
+    },
+    {
+      "id": 102,
+      "tag": "judgment",
+      "q": "소자본 창업 뭐가 좋아?",
+      "expect": {
+        "status": "needs_clarification"
+      }
+    },
+    {
+      "id": 103,
+      "tag": "judgment",
+      "q": "주말 장사 잘 되는 업종은?",
+      "expect": {
+        "intent": "industry_comparison",
+        "primary": "weekend_sales.ratio"
       }
     }
   ]

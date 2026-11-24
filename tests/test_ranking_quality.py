@@ -58,3 +58,38 @@ def test_interpretation_repeating_the_list_is_rejected():
     view = rank(_plan(), _result(ROWS))
     assert explain.repeats_list("A, B, C가 상위입니다.", view)
     assert not explain.repeats_list("매출은 큰데 증감이 마이너스인 곳이 절반입니다.", view)
+
+
+# ---------------------------------------------------------------- 폐업률 순위: 점포가 너무 적은 곳은 뺀다
+def _rate_result(rows):
+    """rows: (업종, 폐업률, 점포 수)"""
+    ops = [CalcMetric(column="close_count", op="ratio"), CalcMetric(column="store_count", op="avg"),
+           CalcMetric(column="close_count", op="sum")]
+    return CalcResult(
+        request_id="r", status="ok", dataset_id="d", data_version="v", data_source="s", rows_used=99,
+        applied=CalcApplied(columns_used=["close_count", "store_count"], operations=ops, group_by=["industry"], filters=[]),
+        results=[CalcRow(group={"industry": n}, values={"close_count.ratio": r, "store_count.avg": s,
+                                                         "close_count.sum": 1.0}, rows_used=1)
+                 for n, r, s in rows],
+    )
+
+
+def _rate_plan(**kw):
+    base = dict(intent="industry_comparison", regions=[], industries=[],
+                metrics=[{"column": "close_count", "op": "ratio"}, {"column": "store_count", "op": "avg"},
+                         {"column": "close_count", "op": "sum"}],
+                group_by=["industry"], comparison="industry", filters=[], period=None,
+                sort_by="close_count.ratio", rank_order="asc", top_n=3)
+    base.update(kw)
+    return AnalysisPlan.model_validate(base)
+
+
+RATES = [("큰A", 0.020, 900), ("큰B", 0.015, 500), ("큰C", 0.030, 200), ("작은D", 0.0, 3), ("작은E", 0.5, 4)]
+
+
+def test_rate_ranking_drops_tiny_groups_both_directions():
+    low = rank(_rate_plan(rank_order="asc"), _rate_result(RATES))
+    assert [r.group["industry"] for r in low.rows] == ["큰B", "큰A", "큰C"]  # 점포 3개짜리 폐업률 0%가 1위가 되지 않는다
+    assert any("30개 미만" in n for n in low.notes)
+    high = rank(_rate_plan(rank_order="desc", top_n=1), _rate_result(RATES))
+    assert [r.group["industry"] for r in high.rows] == ["큰C"]  # 점포 4개짜리 폐업률 50%가 1위가 되지 않는다
