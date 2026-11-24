@@ -399,7 +399,7 @@ pre{margin:8px 0 0;font-size:11px;line-height:1.55;background:var(--panel);borde
         </details>
         <details class="sec" id="storeSec" open>
           <summary>가게 검색</summary>
-          <p class="sub" id="storeSub">이 상권에 영업 중인 가게 · 소상공인 상가정보</p>
+          <p class="sub" id="storeSearchSub">이 상권에 영업 중인 가게 · 소상공인 상가정보</p>
           <input class="st-q" id="storeQ" type="search" placeholder="상호·업종 검색 (예: 카페, 1층 미용실)" autocomplete="off" aria-label="가게 검색어">
           <div class="st-chips" id="storeChips" role="group" aria-label="업종 대분류"></div>
           <div class="st-sum" id="storeSum" aria-live="polite"></div>
@@ -770,10 +770,10 @@ function renderStores(changed){
   if(changed){ST.cat='전체';ST.q='';q.value=''}
   stEl('storeChips').textContent='';stEl('storeKinds').textContent='';stEl('storeList').textContent='';stEl('storeMore').textContent='';
   if(!AREAS.includes(a)){q.disabled=true;stEl('storeSum').textContent='';
-    stEl('storeSub').textContent='가게 검색은 리포트 20곳에서 쓸 수 있어요.';return}
+    stEl('storeSearchSub').textContent='가게 검색은 리포트 20곳에서 쓸 수 있어요.';return}
   q.disabled=false;stEl('storeSum').textContent='가게 목록을 불러오는 중…';
   loadStores(a.id).then(d=>{if(sel!==a.id)return;
-    stEl('storeSub').textContent=`이 상권(${[...d.dongs].sort().join('·')})에 영업 중인 가게 · ${d.asof} 기준 소상공인 상가정보`;
+    stEl('storeSearchSub').textContent=`이 상권(${[...d.dongs].sort().join('·')})에 영업 중인 가게 · ${d.asof} 기준 소상공인 상가정보`;
     renderChips(d);renderStoreList(d)})
   .catch(()=>{if(sel!==a.id)return;stEl('storeSum').textContent='가게 목록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'})}
 {let t;stEl('storeQ').addEventListener('input',e=>{clearTimeout(t);t=setTimeout(()=>{ST.q=e.target.value;
