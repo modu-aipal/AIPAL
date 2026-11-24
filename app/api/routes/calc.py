@@ -54,10 +54,10 @@ async def calc_from_plan(plan: AnalysisPlan, calc: Calculator = Depends(_calcula
     return await run_calc(plan, calc)
 
 
-async def plan_or_raise(question: str, dataset) -> PlanResponse:
-    """질문 -> 계획. 실패는 HTTPException으로 변환 (analyze/dashboard 공용)."""
+async def plan_or_raise(question: str, dataset, history: list[str] | None = None) -> PlanResponse:
+    """질문 -> 계획. 실패는 HTTPException으로 변환 (analyze/dashboard 공용). history: 직전 질문들(이어 묻기용)."""
     try:
-        _, pr = await planner.make_plan(question, dataset)
+        _, pr = await planner.make_plan(question, dataset, history)
     except ollama.OllamaError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e)) from e
     except planner.PlanOutputError as e:

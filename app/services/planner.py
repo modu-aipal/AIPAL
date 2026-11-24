@@ -46,6 +46,7 @@ from app.services.periods import (
     relative_period,
 )
 from app.services import data_facts
+from app.services.follow_up import PlanContext, clean_history, eul_reul, is_follow_up
 from app.services.judgment import DISCLAIMERS, INVEST_REASON, SUCCESS_REASON, detect_judgment
 from app.services.composition import AGES, GENDERS, RATIO_COLUMNS, detect_composition
 from app.services.understand import (
@@ -385,7 +386,8 @@ def _clarify(model, conds, cols, reason, hint=None, suggestions=None) -> PlanRes
 
 # ---------------------------------------------------------------- 판단 (모델 호출 없음)
 def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, model: str = "",
-             *, suggest: bool = True) -> PlanResponse:
+             *, suggest: bool = True, context: PlanContext | None = None,
+             ctx_out: dict | None = None) -> PlanResponse:
     """모델 초안 + 질문 원문 -> 확정된 계획 또는 제안이 담긴 재질문. 코드가 추출한 값이 모델 값보다 우선한다."""
     cols = {c.name: c for c in ds.columns}
     draft = draft.model_copy(deep=True)
@@ -418,6 +420,17 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
                            and i not in _NOT_INDUSTRY]
         else:
             inds = [i for i in draft.industries if i in question]
+    # --- 이어 묻기: "그럼 홍대는?" -> 앞 질문의 조건 중 빠진 것만 이어받는다 ---
+    inherit_notes: list[str] = []
+    follow = context is not None and is_follow_up(question)
+    if follow:
+        ranking_like = any(w in question for w in _RANK_WORDS) or parse_top_n(question, None) is not None
+        if not areas and not am.ambiguous and context.regions and not ranking_like:
+            areas = list(context.regions)
+            inherit_notes.append("지역")
+        if not inds and context.industries and not ("업종" in question and ind_col is not None):
+            inds = list(context.industries)
+            inherit_notes.append("업종")
     ctx = {"areas": areas, "industries": inds, "weekend": "주말" in question}
 
     def clarify(kind: str, conds=(), cols_=(), reason=None, extra=None) -> PlanResponse:
@@ -563,6 +576,11 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
     # --- 지표: 질문 속 표현이 우선, 없으면 모델 값, 그래도 없으면 추정매출 ---
     assumptions: list[str] = []
     explicit = infer_metrics(question, set(cols))
+    if (follow and not explicit and concept in (None, "none") and special is None and context.metrics
+            and context.intent in ("lookup", "region_comparison", "sales_trend")
+            and intent in ("lookup", "region_comparison", "sales_trend")):
+        explicit = [m.model_copy() for m in context.metrics]  # "그럼 홍대는?" -> 앞 질문과 같은 지표
+        inherit_notes.append("지표")
     model_metrics = [normalize_op(m) for m in draft.metrics]
     bad = [v for v in validate_draft(PlanDraft(status="ok", metrics=model_metrics), ds)
            if v != "metrics가 비어 있습니다"]  # 모델이 만든 없는 컬럼·잘못된 연산은 숨기지 않고 알린다
@@ -662,6 +680,7 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
 
     # --- 기간: 명시 > 상대 표현 > 유형별 기본값 (가정은 답변에 밝힌다) ---
     period = _period_from_question(question)
+    period_stated = period is not None  # 질문에서 명시·상대 표현으로 말한 기간인가 (이어받을 기간의 기준)
     if period is not None:
         if has_quarter and not quarter_aligned(period):
             return clarify("bad_period", ["period"],
@@ -675,7 +694,11 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         rel = relative_period(YOY_RE.sub("", question), latest)  # "작년 같은 분기 대비"의 '작년'을 기간으로 읽지 않는다
         if rel:
             period = rel[0]
+            period_stated = True
             assumptions.append(f"기간: {rel[1]}")
+        elif follow and context.period is not None and not yoy:
+            period = context.period  # "그럼 홍대는?" -> 앞 질문에서 말한 기간 그대로
+            inherit_notes.append("기간")
         elif yoy and YOY_SAME_QUARTER_RE.search(question):  # "전년 같은 분기 대비": 기준은 최근 한 분기
             period, desc = last_n(latest, 1)
             assumptions.append(f"기간: {desc}")
@@ -701,6 +724,11 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         assumptions.append(f"{'·'.join(areas)} 합산 값입니다 (지역별 값이 아님)")
     if any(m.op == "growth_rate" for m in metrics) and period and period.start and period.end:
         assumptions.append("증감 기준: " + _growth_basis_text(period, yoy))
+
+    if inherit_notes:
+        assumptions.insert(0, f"이전 질문의 {eul_reul('·'.join(inherit_notes))} 이어서 적용")
+    if ctx_out is not None:
+        ctx_out["period_stated"] = period_stated
 
     plan = AnalysisPlan(
         intent=intent, regions=regions, industries=inds, metrics=metrics, group_by=group_by,
@@ -737,7 +765,27 @@ async def _ask_model(question: str, ds: DatasetMeta) -> tuple[str, PlanDraft]:
     raise PlanOutputError(f"모델 출력이 계획 스키마와 일치하지 않습니다: {last_err}")
 
 
-async def make_plan(question: str, dataset: DatasetMeta | None = None) -> tuple[str, PlanResponse | None]:
+def build_context(history: list[str] | None, ds: DatasetMeta, latest: Quarter) -> PlanContext | None:
+    """직전 질문들을 오래된 순으로 같은 규칙(모델 없이)으로 다시 읽어, 마지막으로 성공한 계획의 조건을 꺼낸다.
+    막힌 질문·설명 질문은 건너뛴다. 앞 질문이 또 이어 묻기였으면 그 앞 조건을 이어받은 채로 읽는다."""
+    context: PlanContext | None = None
+    for h in clean_history(history):
+        out: dict = {}
+        try:
+            r = evaluate(h, _NULL_DRAFT, ds, latest, suggest=False, context=context, ctx_out=out)
+        except (PlanOutputError, PlanValidationError):
+            continue
+        if r.status != "ok" or r.plan is None:
+            continue
+        p = r.plan
+        context = PlanContext(regions=list(p.regions), industries=list(p.industries),
+                              period=p.period if out.get("period_stated") else (context.period if context else None),
+                              metrics=list(p.metrics), intent=p.intent)
+    return context
+
+
+async def make_plan(question: str, dataset: DatasetMeta | None = None,
+                    history: list[str] | None = None) -> tuple[str, PlanResponse | None]:
     ds = dataset or default_dataset()
     try:
         model, draft = await _ask_model(question, ds)
@@ -745,4 +793,5 @@ async def make_plan(question: str, dataset: DatasetMeta | None = None) -> tuple[
         # 모델이 시간·길이 안에 못 끝냈다: 서버 규칙(지역·업종·기간·지표 추출)만으로 처리한다.
         model, draft = get_settings().ollama_model, _NULL_DRAFT
     latest = await latest_quarter()
-    return model, evaluate(question, draft, ds, latest, model)
+    context = build_context(history, ds, latest) if history else None
+    return model, evaluate(question, draft, ds, latest, model, context=context)
