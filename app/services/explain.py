@@ -20,6 +20,7 @@ from app.services.compose import (  # noqa: F401 (tests/다른 모듈이 explain
     OP_LABEL,
     STORE_COLUMNS as _STORE_COLUMNS,
     compose_block,
+    startup_block,
     fmt_value as _fmt_value,
 )
 from app.services.ranking import RankedView, rank
@@ -196,14 +197,21 @@ async def _interpret(question: str, plan: AnalysisPlan, result: CalcResult, view
     return None
 
 
-async def generate_explanation(question: str, plan: AnalysisPlan, result: CalcResult) -> tuple[str, bool]:
-    """(text, interpretation_missing). 호출 실패(OllamaError, 시간 초과 제외)는 그대로 전파."""
+async def generate_explanation(question: str, plan: AnalysisPlan, result: CalcResult, *,
+                                rank_ctx=None, followups: list[str] | None = None) -> tuple[str, bool]:
+    """(text, interpretation_missing). 호출 실패(OllamaError, 시간 초과 제외)는 그대로 전파.
+    rank_ctx/followups: 창업·수입 질문에 덧붙이는 순위 맥락과 이어서 물어볼 질문 (answer_extras)."""
     if not result.results:
         return "조건에 해당하는 계산 결과가 없습니다.", True
     view = rank(plan, result)
     head, lines = compose_block(plan, result, view)
     caveats = build_caveats(result, plan, view)
     notes = insights(plan, result, view)  # 코드가 계산 결과에서 뽑은 관찰: 항상 맞는 문장
+    if plan.kind in ("startup", "income") and plan.intent == "lookup":
+        sb = startup_block(plan, result, view, rank_ctx)
+        if sb is not None:
+            head, lines = sb
+            notes = []  # 증감·합계가 이미 목록에 있다
     wants_model = get_settings().explain_interpretation and _needs_interpretation(plan, result, view)
     interp = await _interpret(question, plan, result, view) if wants_model else None
     parts = ["\n".join([head, *lines])]
@@ -211,6 +219,8 @@ async def generate_explanation(question: str, plan: AnalysisPlan, result: CalcRe
         parts.append("\n".join(f"→ {n}" for n in notes))
     if interp:
         parts.append(interp)
+    if followups:
+        parts.append("→ 이어서 물어보기: " + " / ".join(followups))
     if plan.disclaimers:  # 입지·경쟁 질문의 고정 한계 안내
         parts.append("\n".join(f"※ {d}" for d in plan.disclaimers))
     if caveats:
