@@ -917,3 +917,97 @@ def test_period_outside_data_range_explains_available_range(q):
 
 def test_latest_quarter_itself_is_inside_range():
     assert okplan("강남 2026년 2분기 매출").period.end == "2026-06"
+
+
+# ---------------------------------------------------------------- 이어 묻기 (history)
+from app.services.follow_up import clean_history, is_follow_up  # noqa: E402
+
+
+def follow(history, q):
+    """history(오래된 순)를 읽은 뒤 q를 평가한다. 서버의 make_plan 과 같은 순서."""
+    ctx = planner.build_context(history, DS, LATEST)
+    return planner.evaluate(q, NULL, DS, LATEST, context=ctx)
+
+
+def fplan(history, q):
+    r = follow(history, q)
+    assert r.status == "ok", (history, q, r.reason)
+    return r.plan
+
+
+def test_follow_up_inherits_missing_industry_and_metric():
+    p = fplan(["성수 카페 점포당 매출"], "그럼 홍대는?")
+    assert p.regions == ["홍대"] and p.industries == ["카페"]
+    assert keys(p)[0] == "est_sales.per_store"
+    assert p.assumptions[0].startswith("이전 질문의") and "이어서 적용" in p.assumptions[0]
+
+
+def test_follow_up_inherits_stated_period_but_not_default_period():
+    p = fplan(["성수 카페 2025년 4분기 매출"], "그럼 홍대는?")
+    assert (p.period.start, p.period.end) == ("2025-10", "2025-12") and "기간" in p.assumptions[0]
+    q = fplan(["성수 카페 매출"], "그럼 홍대는?")  # 앞 질문에 기간이 없었다 -> 기본값(최근 4분기) 그대로
+    assert (q.period.start, q.period.end) == ("2025-07", "2026-06") and "기간" not in q.assumptions[0]
+
+
+def test_follow_up_chain_keeps_conditions():
+    p = fplan(["성수 카페 매출", "그럼 홍대는?"], "강남은?")
+    assert p.regions == ["강남"] and p.industries == ["카페"]
+
+
+def test_follow_up_relative_period_word_replaces_old_period():
+    p = fplan(["성수 카페 2025년 4분기 매출"], "작년은?")
+    assert p.regions == ["성수"] and (p.period.start, p.period.end) == ("2025-01", "2025-12")
+
+
+@pytest.mark.parametrize("history,q", [
+    (["성수 카페 매출 알려줘"], "강남 한식 매출 알려줘"),   # 이미 완성된 질문
+    (["성수 카페 매출 알려줘"], "요즘 뜨는 상권은?"),       # 순위형은 지역을 붙이지 않는다
+    (["성수 카페 매출 알려줘"], "창업하기 좋은 곳은?"),     # 이어 묻는 표현이 없다
+    (["성수 카페 매출 알려줘"], "가장 높은 곳은?"),
+])
+def test_unrelated_questions_inherit_nothing(history, q):
+    r = follow(history, q)
+    if r.status == "ok":
+        assert not r.plan.assumptions or not r.plan.assumptions[0].startswith("이전 질문의"), (q, r.plan.assumptions)
+        assert r.plan.regions != ["성수"] or "성수" in q
+    else:
+        assert r.status == "needs_clarification"
+
+
+def test_info_question_never_inherits():
+    assert follow(["성수 카페 매출 알려줘"], "추정매출이 뭐야?").status == "info"
+
+
+def test_follow_up_without_history_behaves_like_before():
+    a = planner.evaluate("그럼 홍대는?", NULL, DS, LATEST)
+    b = follow([], "그럼 홍대는?")
+    assert a.status == b.status and a.plan.regions == b.plan.regions == ["홍대"] and a.plan.industries == []
+
+
+def test_blocked_history_is_skipped():
+    p = fplan(["창업하기 좋은 곳은?", "성수 카페 매출"], "그럼 홍대는?")  # 앞의 막힌 질문은 건너뛴다
+    assert p.industries == ["카페"]
+
+
+def test_industry_word_keeps_region_but_drops_industry():
+    p = fplan(["성수 카페 매출"], "그럼 업종별로는?")
+    assert p.intent == "industry_comparison" and p.regions == ["성수"] and p.industries == []
+
+
+@pytest.mark.parametrize("q,expected", [("그럼 홍대는?", True), ("홍대는?", True), ("작년은?", True), ("점포당은?", True),
+                                        ("강남도?", True), ("요즘 뜨는 상권은?", False), ("창업하기 좋은 곳은?", False),
+                                        ("성수 카페 매출 알려줘", False), ("추정매출이 뭐야?", False)])
+def test_follow_up_detection(q, expected):
+    assert is_follow_up(q) is expected
+
+
+def test_clean_history_is_defensive():
+    assert clean_history(["a", " ", "b", 3, None, "c", "d"]) == ["b", "c", "d"][-3:]
+    assert clean_history(None) == [] and clean_history(["x" * 500])[0] == "x" * 200
+
+
+@pytest.mark.parametrize("word,industry", [("한식", "한식음식점"), ("중식", "중식음식점"), ("분식", "분식전문점"),
+                                           ("치킨", "치킨전문점"), ("빵집", "제과점"), ("피시방", "PC방")])
+def test_short_industry_names_are_not_silently_dropped(word, industry):
+    p = okplan(f"강남 {word} 매출 알려줘")
+    assert p.industries == [industry], word  # 인식되지 않으면 '전체 업종 합계'로 조용히 계산되던 문제

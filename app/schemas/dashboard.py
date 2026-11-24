@@ -1,9 +1,19 @@
 """A 담당 대시보드용 응답 모델. 필드는 합의된 3개만 사용한다."""
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class DashboardRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=1000)
+    # 이번 대화에서 직전에 한 질문들(오래된 순). "그럼 홍대는?"처럼 이어 묻는 질문을 이해하는 데만 쓰고 저장하지 않는다.
+    # 잘못된 값은 오류 대신 무시한다 (없어도 지금처럼 동작한다).
+    history: list[str] = Field(default_factory=list)
+
+    @field_validator("history", mode="before")
+    @classmethod
+    def _clean(cls, v):
+        from app.services.follow_up import clean_history
+
+        return clean_history(v if isinstance(v, list) else None)
 
 
 class DashboardResponse(BaseModel):

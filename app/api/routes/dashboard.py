@@ -16,7 +16,7 @@ async def dashboard_analyze(
     req: DashboardRequest, response: Response, calc: Calculator = Depends(_calculator)
 ) -> DashboardResponse:
     """질문 -> 분석 계획 -> 계산 엔진 -> 설명. A 담당 대시보드용 {area, sql, text}."""
-    pr = await plan_or_raise(req.question, None)
+    pr = await plan_or_raise(req.question, None, req.history)
     if pr.status == "info":  # 데이터 자체에 대한 질문: 계산 없이 고정 문구로 답한다
         return DashboardResponse(area=area_ids([]), sql="", text=pr.info_text or "")
     if pr.status != "ok":

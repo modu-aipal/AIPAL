@@ -1294,6 +1294,117 @@
         "status": "needs_clarification",
         "reason_contains": "2021년 1분기"
       }
+    },
+    {
+      "id": 110,
+      "tag": "follow-up",
+      "history": [
+        "성수 카페 점포당 매출"
+      ],
+      "q": "그럼 홍대는?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "홍대"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 111,
+      "tag": "follow-up",
+      "history": [
+        "성수 카페 2025년 4분기 매출"
+      ],
+      "q": "그럼 홍대는?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "홍대"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "period": {
+          "start": "2025-10",
+          "end": "2025-12"
+        }
+      }
+    },
+    {
+      "id": 112,
+      "tag": "follow-up",
+      "history": [
+        "성수 카페 매출",
+        "그럼 홍대는?"
+      ],
+      "q": "강남은?",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "강남"
+        ],
+        "industries": [
+          "카페"
+        ]
+      }
+    },
+    {
+      "id": 113,
+      "tag": "follow-up",
+      "history": [
+        "성수 카페 매출"
+      ],
+      "q": "그럼 업종별로는?",
+      "expect": {
+        "intent": "industry_comparison",
+        "regions": [
+          "성수"
+        ]
+      }
+    },
+    {
+      "id": 114,
+      "tag": "follow-up",
+      "history": [
+        "성수 카페 매출 알려줘"
+      ],
+      "q": "강남 한식 매출 알려줘",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "강남"
+        ],
+        "industries": [
+          "한식음식점"
+        ]
+      }
+    },
+    {
+      "id": 115,
+      "tag": "follow-up",
+      "history": [
+        "성수 카페 매출 알려줘"
+      ],
+      "q": "요즘 뜨는 상권은?",
+      "expect": {
+        "intent": "ranking",
+        "primary": "est_sales.growth_rate"
+      }
+    },
+    {
+      "id": 116,
+      "tag": "follow-up",
+      "history": [
+        "성수 카페 매출 알려줘"
+      ],
+      "q": "추정매출이 뭐야?",
+      "expect": {
+        "status": "info"
+      }
     }
   ]
 }

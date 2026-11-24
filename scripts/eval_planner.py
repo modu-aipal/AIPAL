@@ -78,9 +78,10 @@ async def run(args) -> int:
         err = None
         try:
             if args.rules_only:
-                resp = planner.evaluate(c["q"], planner._NULL_DRAFT, ds, (2026, 2))
+                ctx = planner.build_context(c.get("history"), ds, (2026, 2))  # 이어 묻기 케이스
+                resp = planner.evaluate(c["q"], planner._NULL_DRAFT, ds, (2026, 2), context=ctx)
             else:
-                _, resp = await planner.make_plan(c["q"], ds)
+                _, resp = await planner.make_plan(c["q"], ds, c.get("history"))
             fails = check(c["expect"], resp)
         except Exception as e:  # 모델 오류/검증 오류도 틀린 것으로 센다
             fails, err = [f"예외 {type(e).__name__}: {str(e)[:80]}"], True

@@ -340,3 +340,25 @@ def test_single_value_lookup_does_not_call_the_model_for_interpretation(monkeypa
     monkeypatch.setattr(explain.ollama, "chat", fake)
     text = _ask("강남 매출 알려줘")
     assert not calls and text.startswith("강남의 ") and "추정매출 합계는" in text.split("\n")[0]
+
+
+# ---------------------------------------------------------------- 이어 묻기: 대시보드가 history 를 보낸다
+def test_dashboard_follow_up_uses_history(monkeypatch):
+    fake_llms(monkeypatch, {"status": "ok", "intent": "other"}, lambda m: "")
+    r = client.post(URL, json={"question": "그럼 홍대는?", "history": ["성수 카페 매출 알려줘"]})
+    assert r.status_code == 200
+    text = r.json()["text"]
+    assert "이전 질문의" in text and "이어서 적용" in text and "홍대" in text
+
+
+def test_dashboard_without_history_is_unchanged(monkeypatch):
+    fake_llms(monkeypatch, {"status": "ok", "intent": "other"}, lambda m: "")
+    r = client.post(URL, json={"question": "그럼 홍대는?"})
+    assert r.status_code == 200 and "이전 질문의" not in r.json()["text"]
+
+
+@pytest.mark.parametrize("bad", ["문자열", 5, {"a": 1}, [1, None, "  "], ["a"] * 10])
+def test_dashboard_ignores_malformed_history(monkeypatch, bad):
+    fake_llms(monkeypatch, {"status": "ok", "intent": "other"}, lambda m: "")
+    r = client.post(URL, json={"question": "성수 카페 매출 알려줘", "history": bad})
+    assert r.status_code == 200
