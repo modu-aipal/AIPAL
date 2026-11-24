@@ -7,7 +7,10 @@ from app.schemas.plan import MetricSpec
 STOCK_COLUMNS = {"store_count", "general_store_count", "franchise_count"}
 MAX_METRICS = 3
 
-GROWTH_WORDS = ("증가", "증감", "감소", "성장", "상승", "하락")
+GROWTH_WORDS = ("증가", "증감", "감소", "성장", "상승", "하락", "늘고", "늘었", "늘어", "줄고", "줄었", "줄어",
+                "오르고", "올랐", "내리고", "내렸", "떨어지", "떨어졌")
+# "카페 많은 곳": 업종 + 많은/적은 + 곳 -> 점포 수 기준 (매출을 말하지 않았을 때, planner 가 업종이 있을 때만 쓴다)
+_MANY_PLACES_RE = re.compile(r"(?:많|적)(?:은|이|게)\s*(?:곳|동네|상권|지역|동|데)")
 
 # ---- 점포당(한 곳당) 표현: '분모 단어'와 '나누는 말'을 따로 보고, 붙어 있을 때만 인정한다 ----
 _DEN = r"(?:점포|가게|매장|업소|상점|업체|사업체)"
@@ -29,6 +32,10 @@ AVG_TICKET_WORDS = ("객단가", "객 단가", "건당 금액", "결제 한 건�
 def is_per_store(q: str) -> bool:
     """'점포당·가게별·매장마다·한 곳당·점포 수 대비·가게 평균 매출' 같은 점포당 표현인가."""
     return any(r.search(q) for r in _PER_STORE_RES)
+
+
+def wants_many_places(q: str) -> bool:
+    return bool(_MANY_PLACES_RE.search(q)) and "매출" not in q
 
 
 def wants_store_count(q: str) -> bool:

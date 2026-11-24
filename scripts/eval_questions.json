@@ -1405,6 +1405,181 @@
       "expect": {
         "status": "info"
       }
+    },
+    {
+      "id": 117,
+      "tag": "follow-up",
+      "history": [
+        "카페 매출"
+      ],
+      "q": "성수동",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "industries": [
+          "카페"
+        ]
+      }
+    },
+    {
+      "id": 118,
+      "tag": "follow-up",
+      "history": [
+        "카페 점포당 매출"
+      ],
+      "q": "홍대",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "홍대"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.per_store"
+      }
+    },
+    {
+      "id": 119,
+      "tag": "follow-up",
+      "history": [
+        "카페 매출"
+      ],
+      "q": "강남 한식 매출 알려줘",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "강남"
+        ],
+        "industries": [
+          "한식음식점"
+        ]
+      }
+    },
+    {
+      "q": "강남 올해 1분기 매출",
+      "tag": "period",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "강남"
+        ],
+        "period": {
+          "start": "2026-01",
+          "end": "2026-03"
+        }
+      },
+      "id": 120
+    },
+    {
+      "q": "이태원 매출 늘고 있어?",
+      "tag": "trend",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "이태원"
+        ],
+        "primary": "est_sales.growth_rate"
+      },
+      "id": 121
+    },
+    {
+      "q": "카페 많은 곳 top 5",
+      "tag": "ranking",
+      "expect": {
+        "intent": "ranking",
+        "industries": [
+          "카페"
+        ],
+        "primary": "store_count.avg"
+      },
+      "id": 122
+    },
+    {
+      "q": "건대 술집 위험해?",
+      "tag": "closure",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "건대"
+        ],
+        "industries": [
+          "주점"
+        ],
+        "primary": "close_count.ratio"
+      },
+      "id": 123
+    },
+    {
+      "q": "이 데이터 언제 거야?",
+      "tag": "info",
+      "expect": {
+        "status": "info"
+      },
+      "id": 124
+    },
+    {
+      "q": "점포 수에 프랜차이즈도 들어가?",
+      "tag": "info",
+      "expect": {
+        "status": "info"
+      },
+      "id": 125
+    },
+    {
+      "history": [
+        "성수 카페 매출"
+      ],
+      "q": "점포당으로 보면?",
+      "tag": "follow-up",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "est_sales.per_store"
+      },
+      "id": 126
+    },
+    {
+      "history": [
+        "성수 카페 매출"
+      ],
+      "q": "그거 말고 점포 수는?",
+      "tag": "follow-up",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "industries": [
+          "카페"
+        ],
+        "primary": "store_count.avg"
+      },
+      "id": 127
+    },
+    {
+      "history": [
+        "성수 카페 매출"
+      ],
+      "q": "2025년 4분기",
+      "tag": "follow-up",
+      "expect": {
+        "intent": "lookup",
+        "regions": [
+          "성수"
+        ],
+        "industries": [
+          "카페"
+        ]
+      },
+      "id": 128
     }
   ]
 }

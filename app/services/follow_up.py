@@ -16,9 +16,12 @@ MAX_HISTORY_CHARS = 200
 
 # 앞 질문을 가리키는 말
 _CUES = ("그럼", "그러면", "그렇다면", "이번엔", "이번에는", "거기", "그곳", "그 지역", "그쪽", "같은 기간", "같은 업종",
-         "같은 조건", "같은 지역", "다시", "아니면", "그 업종", "그건", "그것은", "그것도")
+         "같은 조건", "같은 지역", "다시", "아니면", "그 업종", "그건", "그것은", "그것도", "그거", "그걸", "그것", "방금", "아까")
 # 짧게 끝나는 생략형: "홍대는?", "작년은?", "점포당은?", "강남도?"
-_ELLIPSIS = re.compile(r"(?:는|은|도|은요|는요|이랑|랑|하고)\s*[?？]?$")
+_ELLIPSIS = re.compile(r"(?:는|은|도|은요|는요|이랑|랑|하고|보면|으?로(?:는|도)?|으?로\s*(?:보면|해줘|바꿔줘?|알려줘|보여줘))\s*[?？]?$")
+# 기간만 말한 짧은 답: "2025년 4분기", "작년", "최근 2년으로"
+_PERIOD_ONLY = re.compile(r"^(?:(?:20\d{2}\s*년|올해|금년|작년|지난해|최근\s*\d+\s*(?:년|분기)|최근\s*분기)\s*)?(?:[1-4]\s*분기)?\s*"
+                          r"(?:으?로|은|는|도)?\s*(?:해줘|알려줘|보여줘)?\s*[?？]?$")
 _ELLIPSIS_MAX_CHARS = 14
 _ELLIPSIS_MAX_TOKENS = 2  # "홍대는?", "작년 4분기는?"까지. "요즘 뜨는 상권은?"처럼 내용이 있는 질문은 새 질문이다
 
@@ -38,7 +41,10 @@ def is_follow_up(question: str) -> bool:
     q = question.strip()
     if any(c in q for c in _CUES):
         return True
-    return len(q) <= _ELLIPSIS_MAX_CHARS and len(q.split()) <= _ELLIPSIS_MAX_TOKENS and bool(_ELLIPSIS.search(q))
+    short = len(q) <= _ELLIPSIS_MAX_CHARS and len(q.split()) <= _ELLIPSIS_MAX_TOKENS
+    if short and _ELLIPSIS.search(q):
+        return True
+    return short and bool(re.search(r"20\d{2}\s*년|[1-4]\s*분기|올해|금년|작년|지난해|최근", q)) and bool(_PERIOD_ONLY.match(q))
 
 
 def eul_reul(word: str) -> str:

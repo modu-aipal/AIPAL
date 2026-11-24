@@ -78,8 +78,10 @@ async def run(args) -> int:
         err = None
         try:
             if args.rules_only:
-                ctx = planner.build_context(c.get("history"), ds, (2026, 2))  # 이어 묻기 케이스
-                resp = planner.evaluate(c["q"], planner._NULL_DRAFT, ds, (2026, 2), context=ctx)
+                hist, latest = c.get("history"), (2026, 2)  # 이어 묻기 케이스 (make_plan 과 같은 순서)
+                merged = planner.clarification_answer(c["q"], hist, ds, latest) if hist else None
+                ctx = planner.build_context(planner.clean_history(hist)[:-1] if merged else hist, ds, latest)
+                resp = planner.evaluate(merged or c["q"], planner._NULL_DRAFT, ds, latest, context=ctx)
             else:
                 _, resp = await planner.make_plan(c["q"], ds, c.get("history"))
             fails = check(c["expect"], resp)
