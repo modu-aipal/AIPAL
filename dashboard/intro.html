@@ -417,6 +417,23 @@ let started=false;function start(){if(started)return;started=true;requestAnimati
 Promise.all([document.fonts.ready,new Promise(r=>document.readyState==='complete'?r():addEventListener('load',r,{once:true}))]).then(start);
 setTimeout(start,3000);
 
+/* 지도 미리 받기: 인트로가 나오는 동안 지도 화면(index.html)이 쓸 큰 파일(위성사진·건물·모델·three.js)을 미리 받아 둔다.
+   그래야 '지도 열기'를 누를 때 실사 도시가 바로 뜨고, 단순한 기본 지도가 잠깐 보이지 않는다.
+   고르는 기준(weak)은 index.html 과 같다. 3개씩 차례로 받아 인트로 화면·음악을 방해하지 않는다 */
+function prefetchMap(){
+  const weak=(navigator.hardwareConcurrency||8)<=4||innerWidth<=820;
+  const same=['index.html',weak?'satellite-sm.jpg':'satellite.jpg',weak?'ao-sm.jpg':'ao.jpg',
+    'models/tower-base.glb','models/tower-mid.glb','models/tower-roof.glb',
+    'tex/facade-glass.jpg','tex/facade-office.jpg','tex/facade-brick.jpg','tex/facade-concrete.jpg','tex/trees.webp','trees.bin'].concat(weak?[]:['buildings.bin']);
+  const CDN='https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/';
+  const libs=['https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'].concat(['shaders/CopyShader.js','shaders/LuminosityHighPassShader.js',
+    'postprocessing/EffectComposer.js','postprocessing/RenderPass.js','postprocessing/ShaderPass.js','postprocessing/UnrealBloomPass.js',
+    'loaders/GLTFLoader.js','objects/Lensflare.js'].map(p=>CDN+p));
+  const q=libs.map(u=>()=>fetch(u,{mode:'no-cors'}).then(r=>r.blob())).concat(same.map(u=>()=>fetch(u).then(r=>r.blob())));
+  let i=0;const next=()=>{if(i<q.length)q[i++]().catch(()=>{}).then(next)};for(let k=0;k<3;k++)next()}
+if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+(document.readyState==='complete'?setTimeout(prefetchMap,800):addEventListener('load',()=>setTimeout(prefetchMap,800),{once:true}));
+
 /* 배경음악: 브라우저가 소리 자동 재생을 막으면 '소리 켜기' 버튼이나 첫 클릭·키 입력으로 켠다. 음악 위치는 영상 시간에 맞춘다 */
 const bgm=$('#bgm'),snd=$('#snd');let soundOn=false,userOff=false,fadeT=null;
 function fadeTo(v,ms,after){clearInterval(fadeT);const v0=bgm.volume,t1=performance.now();fadeT=setInterval(()=>{const k=Math.min(1,(performance.now()-t1)/ms);bgm.volume=v0+(v-v0)*k;if(k>=1){clearInterval(fadeT);after&&after()}},30)}
