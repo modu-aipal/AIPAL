@@ -424,6 +424,7 @@ function prefetchMap(){
   const weak=(navigator.hardwareConcurrency||8)<=4||innerWidth<=820;
   const same=['index.html',weak?'satellite-sm.jpg':'satellite.jpg',weak?'ao-sm.jpg':'ao.jpg',
     'models/tower-base.glb','models/tower-mid.glb','models/tower-roof.glb',
+    ...[2,3,4,5].flatMap(n=>['base','mid','roof'].map(k=>'models/'+(weak?'sm/':'')+'kit'+n+'-'+k+'.glb')),
     'tex/facade-glass.jpg','tex/facade-office.jpg','tex/facade-brick.jpg','tex/facade-concrete.jpg','tex/trees.webp','trees.bin'].concat(weak?[]:['buildings.bin']);
   const CDN='https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/';
   const libs=['https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'].concat(['shaders/CopyShader.js','shaders/LuminosityHighPassShader.js',

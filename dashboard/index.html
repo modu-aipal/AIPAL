@@ -958,7 +958,7 @@ void main(){
     const fs=ai<AREAS.length?1:.68,t=typeOf(a),mk=t.key==='market',mat=towerMat(t.color,ai*7.13+1.3,mk?facadeUniforms(FAC.concrete,.4,.46,1.15,0):facadeUniforms(FAC.office,.36,.36,1.05,0)),by=terH(a.pos[0],a.pos[1]);
     const edgeMat=new THREE.LineBasicMaterial({color:t.color,transparent:true,opacity:.8});
     const m=new THREE.Group();m.position.set(a.pos[0],by,a.pos[1]);m.scale.set(fs,.01,fs);mat.userData.u.uBaseY.value=by;
-    stageGeo.forEach((sg,i)=>{const mesh=new THREE.Mesh(sg,mat);mesh.castShadow=mesh.receiveShadow=true;mesh.userData.id=a.id;hitMeshes.push(mesh);m.add(mesh);m.add(new THREE.LineSegments(edgeGeo[i],edgeMat))});
+    stageGeo.forEach((sg,i)=>{const mesh=new THREE.Mesh(sg,mat);mesh.castShadow=mesh.receiveShadow=true;mesh.userData.id=a.id;mesh.visible=false;hitMeshes.push(mesh);m.add(mesh);const e=new THREE.LineSegments(edgeGeo[i],edgeMat);e.visible=false;m.add(e)});
     scene.add(m);
     const ring=new THREE.Mesh(ringGeo,new THREE.MeshBasicMaterial({color:t.color,transparent:true,opacity:.18,side:THREE.DoubleSide,depthWrite:false}));
     ring.rotation.x=-Math.PI/2;ring.position.set(a.pos[0],by+.03,a.pos[1]);scene.add(ring);
@@ -967,14 +967,18 @@ void main(){
   });
   document.getElementById('mapLegend').innerHTML=TYPES.map(t=>`<span><i style="background:${t.color}"></i>${t.name}</span>`).join('')+`<span><i style="background:${SEL}"></i>선택한 상권</span><span class="sub">드래그로 돌리기 · 휠/두 손가락으로 확대<br>탑 높이 = 이 시간대 매출<br>굵은 탑 = 리포트 20곳 · 가는 탑 = 다른 행정동 80곳<br>작은 건물은 배경 장식 · 20곳 주변 건물 © OpenStreetMap<br>낮 위성사진 Copernicus Sentinel-2 (2026-05-31) · 외벽 텍스처 ambientCG · 나무 Poly Haven (CC0)<br>탑 건물 모델: 팀 제작(Meshy)</span>`;
 
-  /* daytime tower kit: base / stackable middle / crown modelled by the team (Meshy), reduced in Blender
+  /* daytime tower kit: 5 building sets (base / stackable middle / crown) modelled by the team (Meshy), reduced in Blender
      (scripts/process_tower_kit.py: voxel remesh + decimate + colour bake). Height still = sales: the base and crown keep
-     their size and the middle is stacked to fill the rest. Same building day and night: at night its glass windows light up
-     and the crown glows in the type colour (the old neon boxes remain only for the 80 slim towers on phones).
-     Model space: base at y=0, width (x) = 1; heights base .969, middle 2.568, crown 1.755 */
-  const KIT={ready:false,parts:null,MAX:[100,1400,100]};
+     their size and the middle is stacked to fill the rest. The sets are mixed evenly over the 100 towers and a tower never
+     shares its set with its nearest neighbours. Same building day and night: at night its glass windows light up and the
+     crown glows in the type colour. The old neon boxes are not drawn at all (they stay only as invisible click targets);
+     they come back only if no set could be loaded.
+     Model space per part: base at y=0, width (x) = 1; heights are read from each model */
+  const KIT_SETS=[1,2,3,4,5].map(n=>n===1?['base','mid','roof'].map(k=>'models/tower-'+k+'.glb')
+    :['base','mid','roof'].map(k=>'models/'+(weak?'sm/':'')+'kit'+n+'-'+k+'.glb'));
+  const KIT={state:'loading',sets:[],MAX:[100,1400,100]};
   /* night: lit windows only where the facade photo is glass (bluish), on a world-space grid like the old towers; crown glows in its type colour */
-  const kitU={uKitWin:{value:0},uKitLit:{value:.4}};
+  const kitU={uKitWin:{value:0},uKitLit:{value:.4}},kitCrown={value:0};
   const KIT_GLSL=`{vec3 tx=diffuseColor.rgb;float glass=smoothstep(0.0,0.07,tx.b-tx.r);
       vec2 q=abs(vKN.x)>abs(vKN.z)?vec2(vKW.z,vKW.y):vec2(vKW.x,vKW.y);vec2 c=q/vec2(0.034,0.042);vec2 id=floor(c);vec2 fr=fract(c);
       float w=step(0.16,fr.x)*step(fr.x,0.84)*step(0.22,fr.y)*step(fr.y,0.8)*step(abs(vKN.y),0.5);
@@ -985,38 +989,45 @@ void main(){
         totalEmissiveRadiance+=vColor*uKitCrown;
       #endif
     }`;
-  cols.forEach(c=>{c.crownT=new THREE.Color(c.t.color).lerp(new THREE.Color('#ffffff'),.42);c.kitOn=false});
-  Promise.all(['base','mid','roof'].map(k=>new THREE.GLTFLoader().loadAsync('models/tower-'+k+'.glb'))).then(gs=>{
-    const W1=new THREE.Color('#ffffff');
-    KIT.parts=gs.map((g,i)=>{let mesh=null;g.scene.traverse(o=>{if(o.isMesh&&!mesh)mesh=o});
-      const m=mesh.material;if(m.map){m.map.encoding=THREE.LinearEncoding;m.map.anisotropy=renderer.capabilities.getMaxAnisotropy()}
-      m.roughness=.5;m.metalness=.15;m.envMapIntensity=.9;m.needsUpdate=true;
-      const pu=Object.assign({uKitCrown:{value:0}},kitU);m.userData.kit=pu;
-      m.onBeforeCompile=sh=>{Object.assign(sh.uniforms,pu);
-        sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vKW;\nvarying vec3 vKN;')
-          .replace('#include <begin_vertex>','#include <begin_vertex>\nvKW=(modelMatrix*instanceMatrix*vec4(transformed,1.0)).xyz;\nvKN=normalize(mat3(modelMatrix)*mat3(instanceMatrix)*objectNormal);');
-        sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vKW;\nvarying vec3 vKN;\nuniform float uKitWin;\nuniform float uKitLit;\nuniform float uKitCrown;')
-          .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n'+KIT_GLSL)};
-      const im=new THREE.InstancedMesh(mesh.geometry,m,KIT.MAX[i]);for(let j=0;j<KIT.MAX[i];j++)im.setColorAt(j,W1);
-      im.count=0;im.visible=false;im.castShadow=im.receiveShadow=true;im.frustumCulled=false;scene.add(im);return im});
-    KIT.ready=true;isDirty=true}).catch(()=>{});
+  cols.forEach(c=>{c.crownT=new THREE.Color(c.t.color).lerp(new THREE.Color('#ffffff'),.42);c.kitOn=false;c.kit=-1});
+  function kitPart(g,i){let mesh=null;g.scene.traverse(o=>{if(o.isMesh&&!mesh)mesh=o});
+    const m=mesh.material;if(m.map){m.map.encoding=THREE.LinearEncoding;m.map.anisotropy=renderer.capabilities.getMaxAnisotropy()}
+    m.roughness=.5;m.metalness=.15;m.envMapIntensity=.9;m.needsUpdate=true;
+    const pu=Object.assign({uKitCrown:i===2?kitCrown:{value:0}},kitU);
+    m.onBeforeCompile=sh=>{Object.assign(sh.uniforms,pu);
+      sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vKW;\nvarying vec3 vKN;')
+        .replace('#include <begin_vertex>','#include <begin_vertex>\nvKW=(modelMatrix*instanceMatrix*vec4(transformed,1.0)).xyz;\nvKN=normalize(mat3(modelMatrix)*mat3(instanceMatrix)*objectNormal);');
+      sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vKW;\nvarying vec3 vKN;\nuniform float uKitWin;\nuniform float uKitLit;\nuniform float uKitCrown;')
+        .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n'+KIT_GLSL)};
+    mesh.geometry.computeBoundingBox();const bb=mesh.geometry.boundingBox;
+    const im=new THREE.InstancedMesh(mesh.geometry,m,KIT.MAX[i]);const W1=new THREE.Color('#ffffff');for(let j=0;j<KIT.MAX[i];j++)im.setColorAt(j,W1);
+    im.count=0;im.visible=false;im.castShadow=im.receiveShadow=true;im.frustumCulled=false;scene.add(im);
+    return{im,h:bb.max.y-bb.min.y}}
+  /* even mix: each tower takes the least-used set that none of its 4 nearest (already placed) towers uses */
+  function assignKit(){const n=KIT.sets.length,used=new Array(n).fill(0);
+    cols.forEach((c,ai)=>{const near=cols.slice(0,ai).map(o=>[(o.a.pos[0]-c.a.pos[0])**2+(o.a.pos[1]-c.a.pos[1])**2,o.kit]).sort((p,q)=>p[0]-q[0]).slice(0,Math.min(4,n-1)).map(p=>p[1]);
+      let best=-1;for(let s=0;s<n;s++)if(!near.includes(s)&&(best<0||used[s]<used[best]))best=s;
+      if(best<0)best=used.indexOf(Math.min(...used));c.kit=best;used[best]++})}
+  Promise.all(KIT_SETS.map(urls=>Promise.all(urls.map(u=>new THREE.GLTFLoader().loadAsync(u))).catch(()=>null))).then(sets=>{
+    KIT.sets=sets.filter(Boolean).map(gs=>gs.map(kitPart));
+    if(!KIT.sets.length)throw 0;
+    assignKit();KIT.state='ready';isDirty=true}).catch(()=>{KIT.state='failed';isDirty=true});
   const kQ=new THREE.Quaternion(),kP=new THREE.Vector3(),kS=new THREE.Vector3(),kM=new THREE.Matrix4(),kUp=new THREE.Vector3(0,1,0),kW=new THREE.Color('#ffffff');
   function updateKit(){
-    const on=KIT.ready;
-    cols.forEach((c,ai)=>{const use=on&&(!weak||ai<AREAS.length);if(c.kitOn!==use){c.kitOn=use;c.m.children.forEach(ch=>ch.visible=!use)}});
-    if(!KIT.ready)return;
-    const [B,Mi,Ro]=KIT.parts;let nb=0,nm=0,nr=0;
-    if(on)cols.forEach((c,ai)=>{if(!c.kitOn)return;
-      const H=c.m.scale.y,wb=.66*c.fs,hb=wb*.969,ws=wb*.6,hs=ws*2.568,hr=ws*1.755,isSel=c.a.id===sel,x=c.a.pos[0],z=c.a.pos[1];
+    const on=KIT.state==='ready';
+    cols.forEach(c=>{const old=KIT.state==='failed';if(c.kitOn!==!old){c.kitOn=!old;c.m.children.forEach(ch=>ch.visible=old)}});
+    if(!on)return;
+    const cnt=KIT.sets.map(()=>[0,0,0]);
+    cols.forEach((c,ai)=>{const S=KIT.sets[c.kit],N=cnt[c.kit],[B,Mi,Ro]=S;
+      const H=c.m.scale.y,wb=.66*c.fs,hb=wb*B.h,ws=wb*.6,hs=ws*Mi.h,hr=ws*Ro.h,isSel=c.a.id===sel,x=c.a.pos[0],z=c.a.pos[1];
       kQ.setFromAxisAngle(kUp,(ai%4)*Math.PI/2);
       let sq=1,fill=H-hb-hr,n=0,sc=1;
       if(fill<0){sq=Math.max(.02,H/(hb+hr));fill=0}else{n=Math.max(1,Math.round(fill/hs));sc=fill/(n*hs)}
-      kP.set(x,c.by,z);kS.set(wb,wb*sq,wb);kM.compose(kP,kQ,kS);B.setMatrixAt(nb,kM);B.setColorAt(nb,kW);nb++;
+      kP.set(x,c.by,z);kS.set(wb,wb*sq,wb);kM.compose(kP,kQ,kS);B.im.setMatrixAt(N[0],kM);B.im.setColorAt(N[0],kW);N[0]++;
       let y=c.by+hb*sq;
-      for(let k=0;k<n&&nm<KIT.MAX[1];k++){kP.set(x,y,z);kS.set(ws,ws*sc,ws);kM.compose(kP,kQ,kS);Mi.setMatrixAt(nm,kM);Mi.setColorAt(nm,isSel?c.dS:kW);nm++;y+=hs*sc}
-      kP.set(x,y,z);kS.set(ws,ws*sq,ws);kM.compose(kP,kQ,kS);Ro.setMatrixAt(nr,kM);Ro.setColorAt(nr,isSel?c.dS:c.crownT);nr++});
-    B.count=nb;Mi.count=nm;Ro.count=nr;
-    KIT.parts.forEach(m=>{m.visible=on;m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true})}
+      for(let k=0;k<n&&N[1]<KIT.MAX[1];k++){kP.set(x,y,z);kS.set(ws,ws*sc,ws);kM.compose(kP,kQ,kS);Mi.im.setMatrixAt(N[1],kM);Mi.im.setColorAt(N[1],isSel?c.dS:kW);N[1]++;y+=hs*sc}
+      kP.set(x,y,z);kS.set(ws,ws*sq,ws);kM.compose(kP,kQ,kS);Ro.im.setMatrixAt(N[2],kM);Ro.im.setColorAt(N[2],isSel?c.dS:c.crownT);N[2]++});
+    KIT.sets.forEach((S,si)=>S.forEach((p,i)=>{p.im.count=cnt[si][i];p.im.visible=cnt[si][i]>0;p.im.instanceMatrix.needsUpdate=true;if(p.im.instanceColor)p.im.instanceColor.needsUpdate=true}))}
 
   /* background city: decorative instanced blocks (not data), kept low and away from the data towers and the water */
   const CN=weak?1400:4200,cityGeo=new THREE.BoxGeometry(1,1,1);cityGeo.translate(0,.5,0);
@@ -1220,7 +1231,7 @@ void main(){
       if(on)selLight.position.y=c.by+c.m.scale.y+.8;
       const s=fw*(on&&!reduce?1+.3*Math.sin(now*.004):1);c.ring.scale.set(s,s,s);c.ring.material.opacity=on?.6:hv?.45:(.12+.12*L.lights)*(1-.75*fG);
       place(c.pin,v.set(c.a.pos[0],c.by+c.m.scale.y+.3,c.a.pos[1]).clone(),on||hv||shown.has(c.a.id))});
-    updateKit();if(KIT.ready){kitU.uKitWin.value=1.5*Math.max(0,Math.min(1,(L.emis-.2)/.6));kitU.uKitLit.value=.25+.45*L.lights;KIT.parts[2].material.userData.kit.uKitCrown.value=.06+.55*L.lights}
+    updateKit();kitU.uKitWin.value=1.5*Math.max(0,Math.min(1,(L.emis-.2)/.6));kitU.uKitLit.value=.25+.45*L.lights;kitCrown.value=.06+.55*L.lights;
     if(!reduce){const selIdx=cols.findIndex(c=>c.a.id===sel),n=low?Math.floor(PN*.4):PN;
       for(let i=0;i<n;i++){pLife[i]+=dt;if(pLife[i]>pMax[i])spawn(i,false);pPos[i*3+1]+=pVel[i]*dt;
         const f=Math.sin(Math.PI*Math.min(1,pLife[i]/pMax[i]))*(.35+.65*L.lights+.25),col=pArea[i]===selIdx?cSel:cols[pArea[i]].pc;
