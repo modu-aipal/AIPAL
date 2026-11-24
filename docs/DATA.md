@@ -17,7 +17,7 @@
 |---|---|
 | `calc_engine/data/region_map.csv` | 지역 5곳 ↔ 행정동 8개 (코드로 연결) |
 | `calc_engine/data/sales_areas.csv` | 원본에서 20곳(23개 동)만 남긴 데이터. **24,340행**(처음 5곳은 8,385행 그대로), 54열(지역 열 추가), **2021Q1~2026Q2**, UTF-8 |
-| `calc_engine/data/answer_key.md` | 정답표 Q1~Q11. pandas와 파이썬 기본 csv로 따로 계산해 일치한 값만 기록. Q1~Q10은 2025Q4 기준, Q11은 2026Q2(사이트 대조) |
+| `calc_engine/data/answer_key.md` | 정답표 Q1~Q14. pandas와 파이썬 기본 csv로 따로 계산해 일치한 값만 기록. Q1~Q10은 2025Q4 기준, Q11은 2026Q2(사이트 대조), Q12는 2025Q4 점포(사이트 대조), Q13·Q14는 2026Q2 점포당 월평균(Q14만 20곳 전체) |
 | `calc_engine/data/stores_areas.csv` | 점포 데이터에서 20곳(23개 동)만 남긴 것. **46,445행**(처음 5곳은 16,308행 그대로), 2021Q1~2026Q2, UTF-8. 매출 데이터의 업종 62개를 모두 포함(점포는 100개 업종) |
 | `calc_engine/scripts/build_store_dataset.py` | 점포 원본 → `stores_areas.csv`. 컬럼 이름을 일반_점포_수·전체_점포_수로 통일 |
 | `calc_engine/data/dong_rank.csv` | 23개 동의 분기별 **서울 전체 행정동(약 425개) 매출 순위**. 원본에서 계산 (대시보드 `rank`와 같은 정의) |
