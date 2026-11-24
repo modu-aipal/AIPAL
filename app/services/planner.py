@@ -43,6 +43,7 @@ from app.services.periods import (
     relative_period,
 )
 from app.services import data_facts
+from app.services.judgment import DISCLAIMERS, INVEST_REASON, SUCCESS_REASON, detect_judgment
 from app.services.composition import RATIO_COLUMNS, detect_composition
 from app.services.understand import (
     has_place_noun,
@@ -211,11 +212,6 @@ def find_industries(question: str, allowed: list[str]) -> list[str]:
 
 
 # ---------------------------------------------------------------- 질문 해석 규칙
-_JUDGMENT_WORDS = ("창업", "차리면", "차려도", "차릴", "열면", "괜찮", "좋을까", "어떨까", "추천",
-                   "성공 확률", "성공확률", "유망", "적합", "해볼만")
-# 창업 '가부' 질문 중 현황 데이터로 답할 수 있는 표현. 성공 확률·유망·추천·적합 같은 판단은 계속 막는다.
-_STARTUP_WORDS = ("창업", "차리면", "차려도", "차릴", "열면", "괜찮", "좋을까", "어떨까", "해볼만")
-_STARTUP_BLOCK = ("성공 확률", "성공확률", "유망", "추천", "적합")
 _MONTHLY_WORDS = ("월별", "월간", "매월", "월 단위", "월단위")
 _TREND_WORDS = ("추이", "추세", "변화", "흐름", "분기별", "변했")
 _RANK_WORDS = ("가장", "제일", "최고", "최대", "높은", "많은", "큰 곳", "낮은", "적은", "상위", "하위", "순위", "순으로", "TOP", "top", "톱")
@@ -232,7 +228,7 @@ _COND_LABEL = {
 }
 _KNOWN_INTENTS = {"lookup", "region_comparison", "industry_comparison", "sales_trend", "ranking"}
 _UNAVAILABLE = ("유동인구", "생활인구", "거주인구", "임대료", "월세", "권리금", "보증금", "인건비", "순이익", "순수익",
-                "영업이익", "수익률", "마진")  # 이 데이터에 없는 항목
+                "영업이익", "수익률", "마진", "소자본", "창업비용", "창업 비용", "초기비용", "자본금")  # 이 데이터에 없는 항목
 _CIRCLED = "①②③④⑤"
 _NULL_DRAFT = PlanDraft(status="ok", intent="other")  # 모델이 아무것도 못 알아들은 최악의 경우
 
@@ -306,6 +302,8 @@ def _suggestion_candidates(kind: str, ctx: dict) -> list[str]:
         return [f"{pre}매출이 가장 높은 상권은?", f"성수와 홍대의 {pre}매출을 비교해줘"]
     if kind == "monthly":
         return [f"{a0} {pre}분기별 매출 추이 보여줘"]
+    if kind == "invest":
+        return ["폐업률 낮은 업종은?", "점포당 월평균 매출이 높은 업종은?", "업종 매출 순위 알려줘"]
     if kind == "avg_ticket":
         return [f"{a0} {pre}점포당 월평균 매출 알려줘", f"{a0} {pre}결제 건수 알려줘"]
     if kind == "need_industry":
@@ -424,11 +422,16 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
     if is_loc and not inds and not unknown_ind and not missing_unavailable(question):
         return clarify("need_industry", ["industry"],
                        reason="어떤 업종인지 알려 주세요. 업종을 알면 지역별 데이터 순위로 보여 드릴 수 있어요.")
-    is_startup = (not is_loc and bool(areas) and bool(inds)
-                  and any(w in question for w in _STARTUP_WORDS)
-                  and not any(w in question for w in _STARTUP_BLOCK))
-    if not is_loc and not is_startup and any(w in question for w in _JUDGMENT_WORDS):
-        return clarify("judgment", reason="추천·창업 성공 여부 판단은 지원하지 않습니다. 대신 데이터로 비교해 볼 수 있습니다.")
+    jd = detect_judgment(question, len(areas), len(inds))
+    jk = jd.kind if jd else None
+    if jk == "invest":
+        return clarify("invest", reason=INVEST_REASON)
+    if jk == "success":
+        return clarify("judgment", reason=SUCCESS_REASON)
+    if (jk == "startup" and not is_loc and not areas and not inds and not unknown_ind
+            and not missing_unavailable(question)):
+        return clarify("need_industry", ["industry"],
+                       reason="어떤 업종인지 알려 주세요. 업종을 알면 지역별 데이터 순위로 보여 드릴 수 있어요.")
     if has_quarter and any(w in question for w in _MONTHLY_WORDS):
         return clarify("monthly", ["period"], reason="데이터가 분기 단위라 월별 분석은 지원하지 않습니다.")
     if comp is None and any(w in question for w in RATIO_WORDS):
@@ -474,21 +477,56 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         intent = "lookup" if len(areas) == 1 else "region_comparison" if len(areas) >= 2 else "ranking"
         if "추이" in question or "변화" in question:
             intent = "sales_trend" if areas else intent
+        if asks_industry and not comp.distribution:  # "주말 장사 잘 되는 업종은?"
+            intent = "industry_comparison"
         if comp.distribution and not areas:
             return clarify("no_area", ["region"],
                            reason=f"어느 지역인지 알려 주세요. 지원하는 지역은 {', '.join(names)}입니다.")
+    elif jk in ("survival", "danger"):  # 폐업률로 잰다 (낮은 순 / 높은 순)
+        special, direction = jk, jd.direction
+        disclaimers = [DISCLAIMERS[jk]]
+        intent = ("industry_comparison" if asks_industry else "region_comparison" if len(areas) >= 2
+                  else "lookup" if len(areas) == 1 else "ranking")
+    elif jk == "outlook":  # 예측이 아니라 최근 추이·증감
+        special = "outlook"
+        disclaimers = [DISCLAIMERS["outlook"]]
+        if asks_industry:
+            intent, concept = "industry_comparison", "growth"
+        elif areas:
+            intent, concept = "sales_trend", "size"  # 추이만 (증감·점포당을 덧붙이지 않는다)
+        else:
+            intent, concept = "ranking", "growth"
+    elif jk == "income":  # 수입 = 점포당 월평균 매출 (순이익 아님)
+        special = "income"
+        disclaimers = [DISCLAIMERS["income"]]
+        if asks_industry:
+            intent, concept = "industry_comparison", "efficiency"
+        elif areas:
+            intent = "lookup" if len(areas) == 1 else "region_comparison"
+        else:
+            intent, concept = "ranking", "efficiency"
+    elif jk == "compare" or (is_loc and len(areas) >= 2):  # 두 대상 중 어느 쪽 (추천이 아닌 비교)
+        special = "compare"
+        disclaimers = [DISCLAIMERS["compare"]]
+        intent = "industry_comparison" if (len(inds) >= 2 and len(areas) < 2) else "region_comparison"
+        concept = "efficiency"
     elif is_loc and inds:
         special = "location"
         intent, concept = "ranking", "efficiency"
         disclaimers = ["데이터 순위이며 입지 추천이 아닙니다. 임대료·유동인구·경쟁 강도·권리금은 반영되지 않았어요."]
-    elif is_startup:
+    elif jk == "startup":
         special = "startup"
-        intent = "lookup" if len(areas) == 1 else "region_comparison"
-        disclaimers = ["현재 데이터로 본 현황이며 창업 성공 여부나 추천이 아닙니다. "
-                       "임대료·유동인구·권리금·경쟁 강도는 반영되지 않았어요."]
+        disclaimers = [DISCLAIMERS["startup"]]
+        if areas and inds:
+            intent = "lookup" if len(areas) == 1 else "region_comparison"
+        elif inds:  # 지역을 안 말했다 -> 지역별 순위
+            intent, concept = "ranking", "efficiency"
+        else:  # 업종을 안 말했다 -> 그 지역의 업종별 순위
+            intent, concept = "industry_comparison", "efficiency"
     elif is_comp:
         special = "competition"
-        intent = "ranking" if not areas else ("region_comparison" if len(areas) >= 2 else "lookup")
+        intent = ("industry_comparison" if asks_industry else "ranking" if not areas
+                  else "region_comparison" if len(areas) >= 2 else "lookup")
         disclaimers = ["점포 수와 점포당 매출로 본 경쟁 정도이며 공식 과밀지수가 아닙니다."]
     if model_cols:  # 모델이 '데이터에 없는 항목'을 지적
         return clarify("columns", [], model_cols)
@@ -512,11 +550,28 @@ def evaluate(question: str, draft: PlanDraft, ds: DatasetMeta, latest: Quarter, 
         metrics = [MetricSpec(column=c, op=op) for c in comp.columns]
         if comp.store:
             metrics += [MetricSpec(column="store_count", op="avg"), MetricSpec(column=comp.columns[0], op="sum")]
+            if "est_sales" in cols and intent in ("ranking", "industry_comparison"):  # 매출 없는 업종 제외 기준
+                metrics.append(MetricSpec(column="est_sales", op="sum"))
         sort_key = f"{comp.columns[0]}.{op}"
         concept = None
         if comp.note:
             assumptions.append(comp.note)
-    elif special == "startup":  # 몇 곳이 있고, 한 곳이 얼마 버는지 (+ 규모·증감)
+        if comp.store and comp.columns[0] == "close_count":
+            disclaimers = [DISCLAIMERS["survival" if direction == "low" else "danger"]]
+    elif special in ("survival", "danger"):
+        # 매출 합계도 함께 계산한다: 점포 데이터에만 있는 업종(매출 없음)이 순위에 섞이지 않게 하는 기준이 된다
+        metrics = [MetricSpec(column="close_count", op="ratio"), MetricSpec(column="store_count", op="avg"),
+                   MetricSpec(column="close_count", op="sum"), MetricSpec(column="est_sales", op="sum")]
+        sort_key = "close_count.ratio"
+        concept = None
+    elif special == "income" and areas and not asks_industry:
+        metrics = [MetricSpec(column="est_sales", op="per_store"), MetricSpec(column="store_count", op="avg")]
+        sort_key = "est_sales.per_store"
+    elif special == "compare":
+        metrics = [MetricSpec(column="est_sales", op="per_store"), MetricSpec(column="est_sales", op="sum"),
+                   MetricSpec(column="est_sales", op="growth_rate")]
+        sort_key = "est_sales.per_store"
+    elif special == "startup" and areas and inds:  # 몇 곳이 있고, 한 곳이 얼마 버는지 (+ 규모·증감)
         metrics = [MetricSpec(column="store_count", op="avg"), MetricSpec(column="est_sales", op="per_store"),
                    MetricSpec(column="est_sales", op="sum"), MetricSpec(column="est_sales", op="growth_rate")]
         sort_key = "est_sales.per_store"

@@ -178,7 +178,7 @@ def test_per_store_only_on_sales_columns():
 
 # ---------------------------------------------------------------- 막힐 때: 이유 + 서버가 검증한 제안
 BLOCKED = [
-    "성수 카페 추천해줘", "건대와 이태원 중 창업하기 좋은 곳은?", "홍대 음식점 월별 매출 보여줘",
+    "성수 카페 성공 확률은?", "가장 안전한 투자처는?", "홍대 음식점 월별 매출 보여줘",
     "카페 점포 비중이 높은 상권은?", "잠실 매출 알려줘", "노량진 매출 알려줘", "성수의 카페 매출 비교",
     "2025년 2월 성수 매출", "분석 좀 해줘", "서점 매출 알려줘",
 ]
@@ -195,7 +195,7 @@ def test_blocked_questions_get_reason_and_runnable_suggestions(q):
 
 
 def test_judgment_suggestions_keep_user_context():
-    r = ev("성수 카페 추천해줘")
+    r = ev("성수 카페 성공 확률은?")
     assert "지원하지 않습니다" in r.reason
     assert any("성수" in s and "카페" in s for s in r.suggested_questions)
 
@@ -255,7 +255,7 @@ def test_unavailable_terms_still_blocked():
 
 
 def test_suggestions_do_not_recurse():
-    r = planner.evaluate("성수 카페 추천해줘", NULL, DS, LATEST, suggest=False)
+    r = planner.evaluate("성수 카페 성공 확률은?", NULL, DS, LATEST, suggest=False)
     assert r.suggested_questions == []
 
 
@@ -359,13 +359,13 @@ def _fake_llm(monkeypatch, payload):
 
 def test_api_plan_returns_suggested_questions(monkeypatch):
     _fake_llm(monkeypatch, {"status": "ok", "intent": "other"})
-    b = client.post("/api/plan", json={"question": "성수 카페 추천해줘"}).json()
+    b = client.post("/api/plan", json={"question": "성수 카페 성공 확률은?"}).json()
     assert b["status"] == "needs_clarification" and len(b["suggested_questions"]) >= 1
 
 
 def test_dashboard_422_carries_suggestions(monkeypatch):
     _fake_llm(monkeypatch, {"status": "ok", "intent": "other"})
-    r = client.post("/api/dashboard/analyze", json={"question": "성수 카페 추천해줘"})
+    r = client.post("/api/dashboard/analyze", json={"question": "성수 카페 성공 확률은?"})
     d = r.json()["detail"]
     assert r.status_code == 422 and d["error"] == "needs_clarification" and d["suggested_questions"]
 
@@ -551,7 +551,7 @@ def test_model_understands_idiom_the_code_does_not_know():
 
 def test_model_can_say_closures_and_openings():
     p = plan_of("문 닫는 가게가 많은 동네", PlanDraft(status="ok", intent="other", concept="closures"))
-    assert p.intent == "ranking" and p.sort_by == "close_count.sum" and p.rank_order == "desc"
+    assert p.intent == "ranking" and p.sort_by == "close_count.ratio" and p.rank_order == "desc"
     p = plan_of("새로 문 연 가게가 많은 곳", PlanDraft(status="ok", intent="other", concept="openings"))
     assert p.sort_by == "open_count.sum"
 
@@ -637,10 +637,11 @@ def test_startup_question_with_two_areas_compares():
     assert p.intent == "region_comparison" and p.sort_by == "est_sales.per_store"
 
 
-@pytest.mark.parametrize("q", ["성수 카페 성공 확률은?", "성수 카페 유망해?", "성수 카페 추천해줘", "성수에서 창업하면 괜찮을까?"])
-def test_startup_judgments_stay_blocked(q):
+@pytest.mark.parametrize("q", ["성수 카페 성공 확률은?", "성수 카페 성공확률 알려줘", "가장 안전한 투자처는?", "카페 투자 수익률은?"])
+def test_probability_and_investment_stay_blocked(q):
     r = ev(q)
-    assert r.status == "needs_clarification" and "지원하지 않습니다" in r.reason
+    assert r.status == "needs_clarification" and r.plan is None and r.suggested_questions
+    assert "지원하지 않습니다" in r.reason or "제공하지 않아요" in r.reason
 
 
 # ---------------------------------------------------------------- 설명 문구가 계산 질문을 가로채지 않는다
@@ -758,3 +759,97 @@ def test_ambiguous_average_with_quarter_in_question():
     assert [(m.column, m.op) for m in p.metrics][:2] == [("est_sales", "per_store"), ("est_sales", "sum")]
     q = okplan("성수 카페 분기 평균 매출")
     assert not any(m.op == "per_store" for m in q.metrics)
+
+
+# ---------------------------------------------------------------- 판단 표현 -> 지표 연결
+def keys(p):
+    return [f"{m.column}.{m.op}" for m in p.metrics]
+
+
+STARTUP_CASES = [
+    # (질문, intent, 정렬 기준)
+    ("강남에서 창업하기 좋은 업종은?", "industry_comparison", "est_sales.per_store"),
+    ("성수에서 어떤 가게를 열면 좋을까?", "industry_comparison", "est_sales.per_store"),
+    ("홍대에서 할 만한 업종은?", "industry_comparison", "est_sales.per_store"),
+    ("카페 창업하기 좋은 곳은?", "ranking", "est_sales.per_store"),
+    ("카페 차리기 좋은 동네 추천해줘", "ranking", "est_sales.per_store"),
+    ("카페 하나 열면 매출 얼마 나와?", "ranking", "est_sales.per_store"),
+    ("카페 하면 한 달에 얼마 벌어?", "ranking", "est_sales.per_store"),
+]
+
+
+@pytest.mark.parametrize("q,intent,sort", STARTUP_CASES)
+def test_startup_wording_is_answered_as_data_ranking(q, intent, sort):
+    p = okplan(q)
+    assert p.intent == intent and p.sort_by == sort and p.disclaimers, q
+
+
+@pytest.mark.parametrize("q", ["창업하기 좋은 곳은?", "가게 열기 좋은 곳 알려줘"])
+def test_startup_without_any_subject_asks_for_industry(q):
+    r = ev(q)
+    assert r.status == "needs_clarification" and "업종" in r.reason and r.suggested_questions
+
+
+SURVIVAL_CASES = [
+    ("폐업 적은 업종은?", "asc"), ("살아남기 쉬운 업종은?", "asc"), ("어느 업종이 제일 안정적이야?", "asc"),
+    ("폐업률 낮은 업종은?", "asc"), ("망하는 업종은?", "desc"), ("폐업이 많은 업종은?", "desc"),
+]
+
+
+@pytest.mark.parametrize("q,order", SURVIVAL_CASES)
+def test_survival_and_danger_use_closure_rate_not_count_or_sales(q, order):
+    p = okplan(q)
+    assert p.intent == "industry_comparison" and p.sort_by == "close_count.ratio" and p.rank_order == order, q
+    assert keys(p)[:2] == ["close_count.ratio", "store_count.avg"]  # 점포 수 하한 적용을 위해 함께 계산
+    assert "est_sales.sum" in keys(p)  # 매출 없는 업종(점포 데이터에만 있음)을 순위에서 빼는 기준
+    assert p.disclaimers
+
+
+def test_competition_wording_ranks_by_store_count():
+    p = okplan("카페 너무 많은 동네는?")
+    assert p.sort_by == "store_count.avg" and p.rank_order == "desc"
+    q = okplan("경쟁 적은 곳은?")
+    assert q.sort_by == "store_count.avg" and q.rank_order == "asc"
+    r = okplan("블루오션 업종은?")
+    assert r.intent == "industry_comparison" and r.sort_by == "store_count.avg" and r.rank_order == "asc"
+
+
+def test_income_wording_is_per_store_sales_with_not_profit_notice():
+    p = okplan("성수 카페 사장 수입은?")
+    assert keys(p) == ["est_sales.per_store", "store_count.avg"]
+    assert any("순이익" in d for d in p.disclaimers)
+
+
+def test_outlook_wording_is_past_trend_not_forecast():
+    p = okplan("성수 카페 앞으로 전망 어때?")
+    assert p.intent == "sales_trend" and any("예측이 아닙니다" in d for d in p.disclaimers)
+    assert keys(p) == ["est_sales.sum"]  # 추이만 보여 준다
+    q = okplan("요즘 유망한 업종은?")
+    assert q.intent == "industry_comparison" and q.sort_by == "est_sales.growth_rate"  # '유망한'이 '망한'으로 읽히지 않는다
+
+
+@pytest.mark.parametrize("q,intent", [("카페랑 편의점 중에 뭐가 나아?", "industry_comparison"),
+                                      ("성수 홍대 중 어디가 나아?", "region_comparison"),
+                                      ("성수 카페 vs 홍대 카페 어디가 좋아?", "region_comparison")])
+def test_choice_questions_compare_per_store_not_just_total(q, intent):
+    p = okplan(q)
+    assert p.intent == intent and p.sort_by == "est_sales.per_store" and p.disclaimers, q
+
+
+def test_investment_and_capital_questions_are_declined_with_reason():
+    r0 = ev("가장 안전한 투자처는?")
+    assert "투자" in r0.reason and "폐업률 낮은 업종은?" in r0.suggested_questions
+    r = ev("소자본 창업 뭐가 좋아?")
+    assert r.status == "needs_clarification" and r.missing_columns
+
+
+@pytest.mark.parametrize("q", ["성수 매출 좋아졌어?", "성수 카페 매출 알려줘", "희망하는 업종 알려줘", "성수와 홍대의 카페 매출을 비교해줘"])
+def test_ordinary_questions_do_not_trigger_judgment_notices(q):
+    from app.services.judgment import detect_judgment
+
+    assert detect_judgment(q, 0, 0) is None, q
+
+
+def test_industry_word_turns_composition_into_industry_ranking():
+    p = okplan("주말 장사 잘 되는 업종은?")
+    assert p.intent == "industry_comparison" and p.sort_by == "weekend_sales.ratio"

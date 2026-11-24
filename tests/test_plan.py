@@ -177,7 +177,7 @@ def test_empty_intent_rejected(monkeypatch):
 
 
 def test_recommendation_unsupported(monkeypatch):
-    _, b = ask(monkeypatch, "건대와 이태원 중 창업하기 좋은 곳은?", OK)
+    _, b = ask(monkeypatch, "성수 카페 성공 확률은?", OK)
     assert b["status"] == "needs_clarification"
     assert "지원하지 않습니다" in b["reason"] and b["plan"] is None
 

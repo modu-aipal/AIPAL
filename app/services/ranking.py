@@ -9,6 +9,7 @@ from app.schemas.calc import CalcResult, CalcRow
 from app.schemas.plan import AnalysisPlan
 
 MIN_SALES_FOR_GROWTH = 1e8  # 원. 증가율 순위에서 제외할 최근 매출 하한
+MIN_STORES_FOR_RATE = 30  # 개. 폐업률·개업률 순위에서 제외할 점포 수(분기 평균) 하한: 분모가 작으면 비율이 크게 흔들린다
 
 
 @dataclass
@@ -54,6 +55,11 @@ def rank(plan: AnalysisPlan, result: CalcResult) -> RankedView:
         kept = [r for r in have if (r.values.get(sales_key) is None or r.values[sales_key] >= MIN_SALES_FOR_GROWTH)]
         excluded_small = len(have) - len(kept)
         have = kept
+    excluded_few = 0
+    if key.endswith(".ratio") and key.split(".")[0] in ("close_count", "open_count")             and any("store_count.avg" in r.values for r in have):
+        kept = [r for r in have if (r.values.get("store_count.avg") or 0) >= MIN_STORES_FOR_RATE]
+        excluded_few = len(have) - len(kept)
+        have = kept
     have.sort(key=lambda r: r.values[key], reverse=desc)
     if plan.top_n and plan.intent in ("ranking", "industry_comparison"):
         view.rows, view.ranked = have[: plan.top_n], True
@@ -61,6 +67,8 @@ def rank(plan: AnalysisPlan, result: CalcResult) -> RankedView:
         view.rows = have
     if excluded_small:
         view.notes.append(f"증가율은 최근 매출이 1억 원 이상인 {_unit(plan)}만 비교했습니다 (작은 {excluded_small}개 제외).")
+    if excluded_few:
+        view.notes.append(f"점포 수(분기 평균)가 {MIN_STORES_FOR_RATE}개 미만인 {_unit(plan)} {excluded_few}개는 비율이 크게 흔들려 뺐습니다.")
     if nodata:
         view.notes.append(f"값을 계산할 수 없는 {_unit(plan)} {nodata}개는 순위에서 뺐습니다.")
     return view
