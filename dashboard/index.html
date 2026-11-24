@@ -258,6 +258,9 @@ th{color:var(--muted)}
 .pc-sub{font-size:11px;color:var(--muted)}
 .pc-ava svg{width:32px;height:32px;display:block}
 .pc-x{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:none;color:var(--ink-2);font-size:17px;line-height:1;cursor:pointer}
+.pc-clear{margin-left:auto;height:30px;padding:0 11px;border-radius:15px;border:1px solid var(--line);background:none;color:var(--ink-2);font:inherit;font-size:12px;line-height:1;cursor:pointer}
+.pc-clear:hover{color:var(--ink)}
+.pc-clear+.pc-x{margin-left:0}
 .pchat .apistat{margin:0 14px 8px}
 .pc-list{flex:1;min-height:90px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;padding:12px;display:flex;flex-direction:column;gap:10px}
 .pc-list::-webkit-scrollbar{display:none}
@@ -416,7 +419,7 @@ pre{margin:8px 0 0;font-size:11px;line-height:1.55;background:var(--panel);borde
     <!-- 로봇 펄이: 지도 오른쪽 아래에 떠 있고, 누르면 따로 대화 창이 열린다 -->
     <div class="pchat" id="pchat" data-open="false" role="dialog" aria-label="로봇 펄이에게 상권 물어보기">
       <div class="pc-head"><span class="pc-ava" id="pcAva"></span><b>펄이</b><span class="pc-sub">상권 도우미</span>
-        <button type="button" class="pc-x" id="pcClose" aria-label="대화 창 닫기">×</button></div>
+        <button type="button" class="pc-clear" id="pcClear" aria-label="대화 비우기" title="대화 비우기">비우기</button><button type="button" class="pc-x" id="pcClose" aria-label="대화 창 닫기">×</button></div>
       <div class="apistat" id="apiStat" hidden><i></i><span></span></div>
       <div class="pc-list" id="pcList" aria-live="polite">
         <div class="botrow"><span class="mini"></span><div class="bubble"><div class="answer">안녕하세요, 저는 <b>펄이</b>예요! 저를 눌러 질문 말풍선을 고르거나 아래에 직접 물어보면, 데이터를 찾아보고 지도를 그 상권으로 옮겨 드릴게요.</div></div></div>
@@ -1183,15 +1186,12 @@ function submitAsk(t){
     res.text=`<span class="src">대시보드 데이터</span><br>AI 분석 서버는 지금 ${bList()}만 계산할 수 있어서, ${jo(names,'은','는')} 대시보드 데이터로 답했어요.<br>`+res.text}
   ask(t,res)
 }
-/* when the AI server asks for more conditions: plain words, plus example questions it can answer (tap to ask) */
-function clarifyHtml(q,raw){
-  const rs=findAreas(q).filter(a=>B_NAME[a.id]).map(a=>B_NAME[a.id]),ind=findInd(q);
-  const regs=(rs.length?rs:['강남','홍대']).slice(0,2),I=ind?ind.name:'커피-음료';
-  const ex=regs.map(r=>`${r} ${I} 분기별 매출 추이 보여줘`);
-  const why=/추천|순위|성공/.test(raw)?'추천이나 창업 적합도는 숫자로 계산하지 않아요. ':'';
-  return `음… 이 질문은 AI 분석 서버가 바로 계산할 수 있는 모양이 아니었어요. ${why}지금은 <b>한 지역의 업종 매출 추이</b>처럼 물어보면 가장 잘 답해요 (지역: ${bList()}).`
-    +`<div class="exq">${ex.map(x=>`<button type="button" class="ex" data-q="${esc(x)}">${esc(x)}</button>`).join('')}</div>`
-    +`<details class="raw"><summary>서버 원문</summary>${esc(raw)}</details>`
+/* when the AI server can't answer (422 needs_clarification): B's own reason, plus B's checked "ask it like this" questions (tap to ask).
+   No suggestions -> B's clarification_question only (it already carries the reason and any examples). */
+function clarifyHtml(c){
+  const sg=c.suggestions,txt=sg.length?(c.reason||c.question):(c.question||c.reason);
+  return esc(txt||'질문을 조금 더 구체적으로 적어 주세요.').replace(/\n/g,'<br>')
+    +(sg.length?`<div class="exq">${sg.map(x=>`<button type="button" class="ex" data-q="${esc(x)}">${esc(x)}</button>`).join('')}</div>`:'')
 }
 function route(text){
   const a=findArea(text);
@@ -1214,8 +1214,12 @@ const MINI='<img alt="" src="data:image/webp;base64,UklGRvAOAABXRUJQVlA4WAoAAAAQ
 const pcList=document.getElementById('pcList');
 document.getElementById('pcAva').innerHTML=MINI;pcList.querySelectorAll('.mini').forEach(m=>m.innerHTML=MINI);
 const toBottom=()=>{pcList.scrollTop=pcList.scrollHeight};
+/* questions asked in this conversation (oldest first, last 3). Sent to B as `history` so it can follow "그럼 홍대는?" */
+const PC_HELLO=pcList.innerHTML;let chatHist=[];
+function clearChat(){apiSeq++;askTimer.forEach(clearTimeout);askTimer=[];chatHist=[];pcList.innerHTML=PC_HELLO;
+  document.querySelector('#ask button').disabled=false;document.getElementById('bot').classList.remove('think','talk');pressChip(null)}
 /* each question adds my bubble and a new 펄이 bubble; the ids move to the newest one */
-function newTurn(q){['bubble','trace','answer','sql'].forEach(id=>{const e=document.getElementById(id);if(e)e.removeAttribute('id')});
+function newTurn(q){chatHist=[...chatHist,q].slice(-3);['bubble','trace','answer','sql'].forEach(id=>{const e=document.getElementById(id);if(e)e.removeAttribute('id')});
   const me=document.createElement('div');me.className='me';me.textContent=q;
   const row=document.createElement('div');row.className='botrow';
   row.innerHTML=`<span class="mini">${MINI}</span><div class="bubble" id="bubble"><div class="trace" id="trace"><span>질문 해석</span><span>SQL 실행</span><span>상권 이동</span><span>해석 작성</span></div><div class="answer" id="answer"></div><details class="sqlbox"><summary>실행한 SQL 보기</summary><pre id="sql"></pre></details></div>`;
@@ -1266,6 +1270,7 @@ pFab.onclick=()=>{if(pMoved){pMoved=false;return}setMenu(pMenu.dataset.open!=='t
 document.getElementById('qOwn').onclick=()=>{setChat(true);setTimeout(()=>document.getElementById('askInput').focus(),320)};
 document.addEventListener('pointerdown',e=>{if(document.getElementById('pmenu').dataset.open==='true'&&!e.target.closest('#pmenu,#pfab'))setMenu(false)});
 document.getElementById('pcClose').onclick=()=>setChat(false);
+document.getElementById('pcClear').onclick=clearChat;
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;setMenu(false);setChat(false)});
 function pressChip(q){document.querySelectorAll('#qs .q').forEach(b=>b.setAttribute('aria-pressed',b.textContent===q))}
 function ask(q,res,instant,same){
@@ -1290,17 +1295,18 @@ const API_BASE=(()=>{let u='';try{const q=new URLSearchParams(location.search).g
 const API_AREA={geondae:'kondae'};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const API_H={'ngrok-skip-browser-warning':'1'};
-async function askApi(q){
+async function askApi(q,history){
   const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),150000);
   try{
-    const r=await fetch(API_BASE+'/api/dashboard/analyze',{method:'POST',headers:{...API_H,'Content-Type':'application/json'},body:JSON.stringify({question:q}),signal:ctl.signal});
+    const r=await fetch(API_BASE+'/api/dashboard/analyze',{method:'POST',headers:{...API_H,'Content-Type':'application/json'},body:JSON.stringify({question:q,history:history||[]}),signal:ctl.signal});
     const body=await r.json().catch(()=>null);
     if(r.ok&&body&&typeof body.text==='string'){
       const ids=String(body.area||'').split(',').map(x=>x.trim()).map(x=>API_AREA[x]||x).filter(id=>AREAS.some(a=>a.id===id));
       const MP=/^\[테스트용 Mock[^\]]*\]\s*/,mock=r.headers.get('X-Is-Mock')==='true'||MP.test(body.text);
       return{kind:'ok',area:ids[0]||null,sql:typeof body.sql==='string'?body.sql:'',text:body.text.replace(MP,''),mock}}
     const d=body&&body.detail;
-    if(r.status===422&&d&&d.error==='needs_clarification')return{kind:'clarify',text:d.clarification_question||'질문을 조금 더 구체적으로 적어 주세요.'};
+    if(r.status===422&&d&&d.error==='needs_clarification'){const str=v=>typeof v==='string'?v.trim():'';
+      return{kind:'clarify',reason:str(d.reason),question:str(d.clarification_question),suggestions:(Array.isArray(d.suggested_questions)?d.suggested_questions:[]).map(str).filter(Boolean).slice(0,3)}}
     if(r.status===401)return{kind:'error',text:'분석 서버가 API 키를 요구해요. 키는 이 페이지에 넣지 말고 서버 쪽 프록시에서 붙여야 해요.'};
     return{kind:'error',text:`분석 서버 오류 (${r.status})`+(typeof d==='string'?': '+d:'')}
   }catch(e){return{kind:'offline',text:e.name==='AbortError'?'분석 서버 응답 시간이 초과됐어요.':'분석 서버에 연결할 수 없어요.'}}
@@ -1314,16 +1320,16 @@ if(API_BASE){
 }
 let apiSeq=0;
 async function apiAsk(q){
-  const my=++apiSeq;askTimer.forEach(clearTimeout);askTimer=[];newTurn(q);
+  const my=++apiSeq,history=chatHist.slice(-3);askTimer.forEach(clearTimeout);askTimer=[];newTurn(q);
   const steps=[...document.querySelectorAll('#trace span')],btn=document.querySelector('#ask button'),ans=document.getElementById('answer'),sqlEl=document.getElementById('sql');
   pressChip(q);botMood('think');steps.forEach(s=>s.classList.remove('on'));steps[0].classList.add('on');
   sqlEl.textContent='…';ans.textContent='AI 분석 서버가 계산하고 설명을 쓰는 중이에요… (로컬 모델이라 수십 초 걸릴 수 있어요)';btn.disabled=true;
-  const res=await askApi(q);if(my!==apiSeq)return;btn.disabled=false;botMood('talk');
+  const res=await askApi(q,history);if(my!==apiSeq)return;btn.disabled=false;botMood('talk');
   if(res.kind==='ok'){steps.forEach(s=>s.classList.add('on'));
     sqlEl.textContent=res.sql||'-- 계산 엔진이 SQL 없이(pandas) 계산했어요';
     ans.innerHTML=`<span class="src ai">AI 분석 서버</span>`+(res.mock?`<span class="src mock">테스트용 Mock 데이터 · 실제 분석 결과 아님</span>`:'')+'<br>'+esc(res.text).replace(/\n/g,'<br>');
     if(res.area)select(res.area,true);return}
-  if(res.kind==='clarify'){sqlEl.textContent='-- 질문이 부족해서 계산하지 않았어요';ans.innerHTML=`<span class="src ai">AI 분석 서버</span><br>`+clarifyHtml(q,res.text);return}
+  if(res.kind==='clarify'){sqlEl.textContent='-- 질문이 부족해서 계산하지 않았어요';ans.innerHTML=`<span class="src ai">AI 분석 서버</span><br>`+clarifyHtml(res);return}
   if(res.kind==='offline')setApiStat('off','AI 분석 서버에 연결할 수 없어요 · 대시보드 데이터로 답해요');
   const local=localRes(q);
   if(local)ask(q,{...local,text:`<span class="src">${esc(res.text)} 대시보드 데이터로 답했어요</span><br>`+local.text},false,true);
