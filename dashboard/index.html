@@ -6,6 +6,8 @@
      비워 두면 start.ps1 의 ngrok 주소로 직접 보낸다. 페이지 주소의 ?api=https://… 가 우선 (이 브라우저에 기억됨, ?api=off 로 끔).
      API 키는 여기에 넣지 않는다 (공개 저장소·공개 페이지). 키는 Vercel 환경변수 B_API_KEY 에만 둔다. -->
 <meta name="aipal-api" content="self">
+<!-- 인트로: 이 탭에서 처음 열면 intro.html(약 30초 소개 영상)을 먼저 보여 준다. 주소에 ?api= 같은 인자가 있거나 이미 봤으면 바로 지도 -->
+<script>try{if(!location.search&&!sessionStorage.getItem('pulseIntro'))location.replace('intro.html')}catch(e){}</script>
 <!-- PWA: 홈 화면에 추가하면 앱처럼 열리고, 한 번 열어 둔 뒤에는 오프라인에서도 지도와 내장 데이터가 보인다 -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0a0d12">

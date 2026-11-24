@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0d12">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>서울 상권 펄스 · 소개</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<!--
+  인트로 (약 30초, 영상처럼 자동 재생). 다 보거나 "건너뛰기"를 누르면 대시보드(index.html)로 간다.
+  숫자는 대시보드에 내장된 C 데이터(26Q2 리포트 20곳)를 그대로 옮긴 것. 바꾸지 않는다.
+  index.html 이 이 브라우저 탭에서 처음 열릴 때 이 페이지로 보낸다 (sessionStorage 'pulseIntro'). ?intro=0 이나 다른 주소 인자가 있으면 바로 대시보드.
+-->
+<style>
+:root{
+  --bg:#0a0d12;--panel:#0f131a;--ink:#eef0f3;--muted:#7d8592;--line:#1e2530;
+  --sel:#ee3e98;--base:#2598d0;--accent:#9cc3f5;--market:#9b6cf0;--good:#2fb35f;
+  --sign:'Black Han Sans',sans-serif;--read:'IBM Plex Sans KR',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--ink);font-family:var(--read);overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* ---------- stage: sky glow, perspective floor, grain ---------- */
+.stage{position:fixed;inset:0;overflow:hidden}
+.sky{position:absolute;inset:0;background:
+  radial-gradient(120% 70% at 50% 108%,rgba(238,62,152,.30),transparent 60%),
+  radial-gradient(90% 60% at 15% 0%,rgba(37,152,208,.20),transparent 60%),
+  radial-gradient(80% 50% at 90% 10%,rgba(155,108,240,.16),transparent 60%),
+  linear-gradient(#07090d,#0d1018 55%,#120c1c);transition:filter 1.2s}
+.floor{position:absolute;left:-50%;right:-50%;bottom:-8%;height:62%;
+  background-image:linear-gradient(rgba(156,195,245,.16) 1px,transparent 1px),linear-gradient(90deg,rgba(156,195,245,.16) 1px,transparent 1px);
+  background-size:64px 64px;transform:perspective(520px) rotateX(64deg);transform-origin:50% 100%;
+  -webkit-mask-image:linear-gradient(transparent,#000 45%);mask-image:linear-gradient(transparent,#000 45%);
+  animation:floorRun 3.2s linear infinite}
+@keyframes floorRun{to{background-position:0 64px,0 0}}
+.grain{position:absolute;inset:-50%;pointer-events:none;opacity:.07;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grain 1s steps(6) infinite}
+@keyframes grain{0%{transform:translate(0,0)}25%{transform:translate(-4%,3%)}50%{transform:translate(3%,-2%)}75%{transform:translate(-2%,-4%)}100%{transform:translate(0,0)}}
+.vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 90% at 50% 50%,transparent 55%,rgba(0,0,0,.65))}
+.motes{position:absolute;inset:0;pointer-events:none}
+
+/* ---------- scenes ---------- */
+.scene{position:absolute;inset:0;display:grid;place-items:center;padding:max(48px,4vw) clamp(16px,4vw,56px) max(56px,4vw);opacity:0;visibility:hidden;transition:opacity .7s ease,visibility 0s .7s}
+.scene.on{opacity:1;visibility:visible;transition:opacity .7s ease,visibility 0s}
+.kicker{font-family:var(--mono);font-size:clamp(11px,1.2vw,14px);letter-spacing:.32em;color:var(--accent);text-transform:uppercase;margin-bottom:clamp(8px,1.6vh,16px)}
+.rise{opacity:0;transform:translateY(24px);filter:blur(6px)}
+.on .rise{animation:rise .9s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:var(--d,0s)}
+@keyframes rise{to{opacity:1;transform:none;filter:none}}
+
+/* S1 pulse + title */
+.s1 .wrap{text-align:center;width:min(1100px,100%)}
+.ecg{width:100%;height:clamp(90px,16vh,170px);overflow:visible;display:block;margin:0 auto clamp(6px,2vh,20px)}
+.ecg path{fill:none;stroke:var(--sel);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 8px var(--sel)) drop-shadow(0 0 22px rgba(238,62,152,.6));stroke-dasharray:1;stroke-dashoffset:1}
+.on .ecg path{animation:draw 2.1s cubic-bezier(.6,.1,.3,1) forwards .2s}
+@keyframes draw{to{stroke-dashoffset:0}}
+.ecg .dot{fill:#fff;filter:drop-shadow(0 0 10px var(--sel));opacity:0}
+.on .ecg .dot{animation:dotOn .3s 2.2s forwards}
+@keyframes dotOn{to{opacity:1}}
+.title{font-family:var(--sign);font-weight:400;line-height:.95;font-size:clamp(54px,12vw,168px);letter-spacing:-.01em;display:flex;justify-content:center;flex-wrap:wrap;gap:0 .08em}
+.title .ch{display:inline-block;opacity:0;transform:translateY(.4em) scale(.9)}
+.title .pink{color:var(--sel);text-shadow:0 0 24px rgba(238,62,152,.55)}
+.on .title .ch{animation:chIn .7s cubic-bezier(.2,.9,.2,1.2) forwards;animation-delay:calc(1.7s + var(--i)*70ms)}
+@keyframes chIn{60%{opacity:1;transform:translateY(-.06em) scale(1.03)}to{opacity:1;transform:none}}
+.sub{margin-top:clamp(10px,2.4vh,26px);font-size:clamp(16px,2.2vw,26px);color:#c9cfd8}
+.sub b{color:var(--ink)}
+.meta{margin-top:clamp(14px,3vh,30px);display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:clamp(11px,1.1vw,13px);padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(15,19,26,.7);color:var(--accent)}
+
+/* S2 problem: data sleeping in a table */
+.s2 .wrap{width:min(1100px,100%);display:grid;gap:clamp(14px,3vh,28px)}
+.sheet{position:relative;height:clamp(180px,34vh,320px);overflow:hidden;border:1px solid var(--line);border-radius:14px;background:rgba(15,19,26,.55);
+  -webkit-mask-image:linear-gradient(transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(transparent,#000 18%,#000 82%,transparent)}
+.sheet .rows{font-family:var(--mono);font-size:clamp(11px,1.25vw,15px);color:#58616e;line-height:2.1;padding:0 22px;white-space:nowrap}
+.on .sheet .rows{animation:scrollRows 9s linear forwards}
+@keyframes scrollRows{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+.sheet .rows span{display:inline-block;min-width:9.5em}
+.sheet .rows .v{color:#77808c;text-align:right;min-width:7em}
+.headline{font-family:var(--sign);font-size:clamp(30px,5.4vw,72px);line-height:1.12;font-weight:400}
+.headline em{font-style:normal;color:var(--muted);text-decoration:line-through;text-decoration-color:var(--sel);text-decoration-thickness:.08em}
+.qs{display:flex;flex-wrap:wrap;gap:10px 14px}
+.q{font-size:clamp(15px,1.9vw,22px);padding:10px 16px;border-radius:12px;border:1px solid rgba(156,195,245,.25);background:rgba(37,152,208,.08)}
+.q b{color:var(--accent);font-family:var(--mono);font-weight:500;margin-right:8px}
+
+/* S3 skyline */
+.s3{place-items:stretch}
+.s3 .wrap{position:relative;display:grid;grid-template-rows:auto 1fr auto;height:100%;width:min(1200px,100%);margin:0 auto;gap:8px}
+.s3 .top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.clock{font-family:var(--sign);font-size:clamp(44px,8vw,104px);line-height:.9;letter-spacing:-.02em}
+.clock small{display:block;font-family:var(--mono);font-size:clamp(12px,1.3vw,15px);letter-spacing:.2em;color:var(--accent);margin-bottom:6px}
+.sum{text-align:right}
+.sum .n{font-family:var(--mono);font-weight:600;font-size:clamp(22px,3.4vw,40px)}
+.sum .l{font-size:clamp(12px,1.3vw,15px);color:var(--muted)}
+.city{width:100%;height:100%;overflow:visible}
+.city text{font-family:var(--read);font-size:22px;font-weight:700;fill:#c9cfd8}
+.city .lbl{font-family:var(--mono);font-size:20px;font-weight:600}
+.leader{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;font-size:clamp(14px,1.8vw,20px);min-height:2.4em}
+.leader .tag{font-family:var(--mono);font-size:.8em;padding:4px 10px;border-radius:999px;background:rgba(238,62,152,.15);color:#ff9cd0;border:1px solid rgba(238,62,152,.4)}
+.legend{display:flex;gap:16px;justify-content:center;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+
+/* S4 pearl */
+.s4 .wrap{width:min(1100px,100%);display:grid;grid-template-columns:minmax(140px,.8fr) 1.6fr;gap:clamp(16px,4vw,56px);align-items:center}
+.pearl{position:relative;justify-self:center;width:clamp(130px,20vw,250px);aspect-ratio:150/219}
+.pearl img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 24px 40px rgba(238,62,152,.35))}
+.pearl .talk{opacity:0}
+.on .pearl{animation:pearlIn 1s cubic-bezier(.2,.9,.2,1.15) both,bob 3s ease-in-out 1s infinite}
+.on .pearl .talk{animation:blinkTalk .5s steps(1) 2.6s 6}
+@keyframes pearlIn{from{opacity:0;transform:translate(-60px,40px) rotate(-12deg) scale(.6)}to{opacity:1;transform:none}}
+@keyframes bob{50%{transform:translateY(-12px)}}
+@keyframes blinkTalk{50%{opacity:1}}
+.pearl::after{content:"";position:absolute;left:15%;right:15%;bottom:-8%;height:10%;border-radius:50%;background:radial-gradient(rgba(238,62,152,.45),transparent 70%)}
+.chat{display:grid;gap:14px}
+.bub{max-width:100%;padding:16px 20px;border-radius:20px;font-size:clamp(16px,2.1vw,24px);line-height:1.45}
+.bub.me{justify-self:end;background:var(--sel);color:#fff;border-bottom-right-radius:6px;box-shadow:0 10px 30px rgba(238,62,152,.35)}
+.bub.ai{background:rgba(15,19,26,.85);border:1px solid rgba(156,195,245,.25);border-bottom-left-radius:6px}
+.bub.ai .badge{display:inline-block;font-family:var(--mono);font-size:12px;padding:2px 8px;border-radius:6px;background:rgba(47,179,95,.16);color:#7fe0a3;margin-bottom:8px}
+.bub.ai b{font-family:var(--mono);color:#fff}
+.caret::after{content:"▍";color:#fff;animation:caret .8s steps(1) infinite}
+@keyframes caret{50%{opacity:0}}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.node{font-size:clamp(12px,1.35vw,15px);padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:rgba(15,19,26,.7);color:var(--muted);transition:all .4s}
+.node b{font-family:var(--mono);margin-right:6px;color:var(--accent)}
+.node.lit{color:var(--ink);border-color:var(--sel);box-shadow:0 0 0 1px var(--sel),0 0 22px rgba(238,62,152,.35)}
+.arrow{color:#3a4350;font-family:var(--mono)}
+
+/* S5 team */
+.s5 .wrap{width:min(1150px,100%);text-align:center}
+.team-title{font-family:var(--sign);font-size:clamp(40px,7.5vw,96px);line-height:1;font-weight:400;margin:10px 0 clamp(18px,4vh,40px)}
+.team-title span{color:var(--sel)}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(10px,2vw,22px);perspective:900px}
+.card{position:relative;text-align:left;padding:clamp(16px,2.2vw,26px);border-radius:18px;background:linear-gradient(160deg,rgba(25,31,42,.92),rgba(12,15,21,.92));border:1px solid var(--line);overflow:hidden;opacity:0;transform:rotateY(-35deg) translateY(30px)}
+.on .card{animation:cardIn .9s cubic-bezier(.2,.9,.2,1) forwards;animation-delay:var(--d)}
+@keyframes cardIn{to{opacity:1;transform:none}}
+.card::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--c)}
+.card::after{content:"";position:absolute;right:-30%;top:-40%;width:80%;height:80%;background:radial-gradient(var(--glow),transparent 65%);pointer-events:none}
+.role{font-family:var(--sign);font-size:clamp(46px,6vw,78px);line-height:1;color:var(--c)}
+.who{margin-top:10px;font-size:clamp(18px,2.2vw,26px);font-weight:700}
+.who small{font-family:var(--mono);font-size:.55em;font-weight:500;color:var(--sel);border:1px solid rgba(238,62,152,.5);border-radius:6px;padding:2px 6px;margin-left:8px;vertical-align:.25em}
+.part{margin-top:4px;font-family:var(--mono);font-size:clamp(12px,1.3vw,14px);color:var(--accent)}
+.does{margin-top:12px;font-size:clamp(13px,1.5vw,16px);color:#b9c0ca;line-height:1.55}
+.pipe{margin-top:clamp(16px,3vh,30px);font-family:var(--mono);font-size:clamp(12px,1.35vw,15px);color:var(--muted)}
+.pipe b{color:var(--ink);font-weight:500}
+
+/* S6 promise + CTA */
+.s6 .wrap{width:min(1100px,100%);text-align:center}
+.promise{font-family:var(--sign);font-weight:400;font-size:clamp(34px,6.2vw,84px);line-height:1.1}
+.promise span{color:var(--sel)}
+.stats{margin:clamp(20px,4.5vh,46px) auto 0;display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(8px,1.6vw,18px);max-width:1000px}
+.stat{padding:clamp(12px,1.8vw,20px) 10px;border-radius:14px;border:1px solid var(--line);background:rgba(15,19,26,.6)}
+.stat .n{font-family:var(--mono);font-weight:600;font-size:clamp(22px,3.4vw,42px);letter-spacing:-.02em}
+.stat .l{margin-top:4px;font-size:clamp(11px,1.25vw,14px);color:var(--muted)}
+.cta{margin-top:clamp(22px,5vh,48px);display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.go{position:relative;font-family:var(--sign);font-size:clamp(20px,2.6vw,30px);padding:16px 34px;border-radius:16px;background:var(--sel);color:#fff;box-shadow:0 12px 40px rgba(238,62,152,.45);text-decoration:none;overflow:hidden}
+.go::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.45) 50%,transparent 70%);transform:translateX(-120%);animation:sheen 2.6s ease-in-out 1.5s infinite}
+@keyframes sheen{60%,100%{transform:translateX(120%)}}
+.go:focus-visible,.ghost:focus-visible,.skip:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.ghost{font-size:clamp(14px,1.6vw,17px);padding:16px 22px;border-radius:16px;border:1px solid var(--line);color:#c9cfd8}
+.src{margin-top:clamp(16px,3vh,26px);font-size:11px;color:#5d6572;line-height:1.6}
+
+/* HUD */
+.hud{position:fixed;left:0;right:0;bottom:0;padding:0 clamp(16px,3vw,32px) calc(14px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:14px;z-index:5}
+.bar{flex:1;height:3px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--base),var(--sel))}
+.skip{font-family:var(--mono);font-size:13px;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:rgba(15,19,26,.75);color:#c9cfd8;white-space:nowrap}
+.snd{border-color:rgba(238,62,152,.6);color:#fff;animation:sndPulse 1.6s ease-in-out infinite}
+.snd.on{animation:none;border-color:var(--line);color:#c9cfd8}
+@keyframes sndPulse{0%,100%{box-shadow:0 0 0 0 rgba(238,62,152,.45)}50%{box-shadow:0 0 0 8px rgba(238,62,152,0)}}
+.brand{position:fixed;top:calc(14px + env(safe-area-inset-top));left:clamp(16px,3vw,32px);font-family:var(--mono);font-size:12px;letter-spacing:.2em;color:var(--muted);z-index:5}
+.brand b{color:var(--sel)}
+.sound{display:none}
+
+@media (max-width:760px){
+  .s4 .wrap{grid-template-columns:1fr;justify-items:center}
+  .chat{width:100%}
+  .cards{grid-template-columns:1fr;gap:10px}
+  .card{display:grid;grid-template-columns:auto 1fr;column-gap:16px;align-items:center;padding:14px 16px}
+  .card .role{grid-row:1/4;font-size:48px}
+  .card .who{margin-top:0}
+  .card .does{grid-column:2;margin-top:4px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .city text,.city .lbl{font-size:46px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}
+}
+</style>
+
+<div class="stage" aria-hidden="true">
+  <div class="sky"></div>
+  <div class="floor"></div>
+  <canvas class="motes"></canvas>
+  <div class="grain"></div>
+  <div class="vignette"></div>
+</div>
+
+<div class="brand">TEAM <b>AIPAL</b> · SEOUL PULSE</div>
+
+<main>
+  <!-- 1. 펄스 -->
+  <section class="scene s1" data-t="0" data-d="5" aria-label="서울 상권 펄스">
+    <div class="wrap">
+      <svg class="ecg" viewBox="0 0 1000 160" preserveAspectRatio="none">
+        <path pathLength="1" d="M0 110 H300 L330 110 L350 70 L370 140 L395 20 L420 150 L445 95 L470 110 H560 L585 100 L600 110 H700 L720 90 L740 110 H1000"/>
+        <circle class="dot" cx="1000" cy="110" r="5"/>
+      </svg>
+      <h1 class="title" aria-label="서울 상권 펄스"></h1>
+      <p class="sub rise" style="--d:2.6s">서울의 <b>매출 맥박</b>을, 3D 지도 위에서 한눈에.</p>
+      <div class="meta rise" style="--d:3.1s"><span class="chip">26년 2분기</span><span class="chip">행정동 100곳</span><span class="chip">시간대 6구간</span><span class="chip">AI 상권 도우미 펄이</span></div>
+    </div>
+  </section>
+
+  <!-- 2. 문제 -->
+  <section class="scene s2" data-t="5" data-d="5.5" aria-label="문제">
+    <div class="wrap">
+      <div class="kicker rise">PROBLEM</div>
+      <h2 class="headline rise" style="--d:.15s">상권 데이터는 <em>표 속에</em><br>잠들어 있었어요.</h2>
+      <div class="sheet rise" style="--d:.3s"><div class="rows" id="rows"></div></div>
+      <div class="qs">
+        <div class="q rise" style="--d:1.4s"><b>01</b>어디가 크고</div>
+        <div class="q rise" style="--d:1.9s"><b>02</b>언제 붐비고</div>
+        <div class="q rise" style="--d:2.4s"><b>03</b>어떤 가게가 있을까?</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 도시가 깨어난다 -->
+  <section class="scene s3" data-t="10.5" data-d="8" aria-label="시간대별 매출 도시">
+    <div class="wrap">
+      <div class="top">
+        <div class="clock rise"><small>SOLUTION · 건물 높이 = 이 시간대 매출</small><span id="clock">00–06</span></div>
+        <div class="sum rise" style="--d:.2s"><div class="n" id="sum">0억 원</div><div class="l" id="sumL">리포트 20곳 · 26년 2분기 추정매출</div></div>
+      </div>
+      <svg class="city" id="city" viewBox="0 0 1200 610" preserveAspectRatio="xMidYMax meet"></svg>
+      <div>
+        <div class="leader" id="leader"></div>
+        <div class="legend"><span><i style="background:var(--sel)"></i>이 시간대 1위</span><span><i style="background:var(--base)"></i>소비·서비스형</span><span><i style="background:var(--market)"></i>시장·도매형</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. 펄이 -->
+  <section class="scene s4" data-t="18.5" data-d="7" aria-label="AI 상권 도우미 펄이">
+    <div class="wrap">
+      <div class="pearl"><img src="pearl/pearl_happy.webp" alt="로봇 펄이"><img class="talk" src="pearl/pearl_talk.webp" alt=""></div>
+      <div class="chat">
+        <div class="kicker rise">ASK PEARL · 펄이에게 물어보세요</div>
+        <div class="bub me rise" style="--d:.5s"><span id="typeQ"></span></div>
+        <div class="bub ai rise" style="--d:2.2s"><span class="badge">● 데이터로 답해요</span><br><span id="typeA"></span></div>
+        <div class="flow rise" style="--d:3s" id="flow">
+          <span class="node"><b>Q</b>질문</span><span class="arrow">→</span>
+          <span class="node"><b>B</b>이해·검증</span><span class="arrow">→</span>
+          <span class="node"><b>C</b>계산</span><span class="arrow">→</span>
+          <span class="node"><b>A</b>지도·답변</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. 팀 -->
+  <section class="scene s5" data-t="25.5" data-d="6" aria-label="팀 소개">
+    <div class="wrap">
+      <div class="kicker rise">WHO WE ARE</div>
+      <h2 class="team-title rise" style="--d:.1s">TEAM <span>AIPAL</span></h2>
+      <div class="cards">
+        <article class="card" style="--c:var(--sel);--glow:rgba(238,62,152,.22);--d:.4s">
+          <div class="role">A</div><div class="who">유진아</div><div class="part">3D DASHBOARD</div>
+          <p class="does">3D 지도·리포트·가게 검색·펄이까지, 눈에 보이는 모든 화면</p>
+        </article>
+        <article class="card" style="--c:var(--accent);--glow:rgba(156,195,245,.2);--d:.65s">
+          <div class="role">B</div><div class="who">채홍<small>팀장</small></div><div class="part">AI ANALYSIS SERVER</div>
+          <p class="does">자연어 질문을 이해하고, 계산할 수 있는 질문인지 검증</p>
+        </article>
+        <article class="card" style="--c:var(--good);--glow:rgba(47,179,95,.2);--d:.9s">
+          <div class="role">C</div><div class="who">이성균</div><div class="part">CALC ENGINE</div>
+          <p class="does">서울시 공공데이터로 매출·점포 숫자를 계산하고 검증</p>
+        </article>
+      </div>
+      <p class="pipe rise" style="--d:1.6s">질문 <b>→ B</b> 이해 <b>→ C</b> 계산 <b>→ A</b> 화면 · 세 역할이 하나의 답을 만들어요</p>
+    </div>
+  </section>
+
+  <!-- 6. 약속 + 시작 -->
+  <section class="scene s6" data-t="31.5" data-d="999" aria-label="시작하기">
+    <div class="wrap">
+      <div class="kicker rise">OUR PROMISE</div>
+      <h2 class="promise rise" style="--d:.1s">숫자는 <span>만들지 않아요.</span><br>서울의 데이터를, 그대로 한눈에.</h2>
+      <div class="stats">
+        <div class="stat rise" style="--d:.5s"><div class="n" data-count="100">0</div><div class="l">행정동 상권</div></div>
+        <div class="stat rise" style="--d:.65s"><div class="n" data-count="99735">0</div><div class="l">가게 검색</div></div>
+        <div class="stat rise" style="--d:.8s"><div class="n" data-count="8">0</div><div class="l">분기 추이 (24Q3–26Q2)</div></div>
+        <div class="stat rise" style="--d:.95s"><div class="n" data-count="6">0</div><div class="l">시간대 구간</div></div>
+      </div>
+      <div class="cta rise" style="--d:1.3s">
+        <a class="go" id="go" href="index.html">지도 열기 →</a>
+        <button class="ghost" id="replay" type="button">↺ 다시 보기</button>
+      </div>
+      <p class="src rise" style="--d:1.6s">추정매출: 서울 열린데이터광장 OA-22175·OA-22172 (카드 결제 기반 추정치, 실제 매출 아님) · 가게: 소상공인시장진흥공단 상가(상권)정보 2026-09-30 · 음악: Seoul Pulse Lounge (AIPAL, Suno로 제작)</p>
+    </div>
+  </section>
+</main>
+
+<div class="hud">
+  <button class="skip snd" id="snd" type="button" aria-pressed="false">♪ 소리 켜기</button>
+  <audio id="bgm" preload="auto"><source src="music/seoul-pulse-lounge-aipal.ogg" type='audio/ogg; codecs="opus"'><source src="music/seoul-pulse-lounge-aipal.m4a" type="audio/mp4"></audio>
+  <div class="bar" aria-hidden="true"><i id="prog"></i></div>
+  <button class="skip" id="skip" type="button">건너뛰기 ›</button>
+</div>
+
+<script>
+/* 26Q2 리포트 20곳: 대시보드 내장 C 데이터(AREAS)에서 그대로 옮김. s = 분기 추정매출(억 원), b = 시간대 6구간 매출(억 원), t = 상권 유형 */
+const AREAS=[{"n":"제기동","s":9423.2,"b":[344.9,2583.7,2811.6,2667.8,961.7,53.6],"t":"market"},{"n":"가산동","s":7985.5,"b":[33.8,468.0,2413.3,2740.3,2147.4,182.7],"t":"city"},{"n":"노량진2동","s":6633.7,"b":[238.9,1064.8,1315.9,1428.7,2319.4,266.0],"t":"market"},{"n":"한강로동","s":5778.4,"b":[24.2,407.2,1726.4,2045.8,1404.3,170.5],"t":"city"},{"n":"종로1~4가","s":5763.3,"b":[133.2,427.1,1675.7,1646.5,1441.8,439.0],"t":"city"},{"n":"강남","s":5009.3,"b":[150.2,527.7,1508.6,963.2,1355.8,503.8],"t":"city"},{"n":"가락1동","s":4170.4,"b":[1358.7,981.5,519.7,506.6,299.0,504.8],"t":"market"},{"n":"홍대","s":3642.8,"b":[270.0,210.4,696.5,768.0,1192.9,505.0],"t":"city"},{"n":"여의동","s":3554.2,"b":[64.6,401.4,1291.6,501.2,947.1,348.2],"t":"city"},{"n":"성수","s":3546.5,"b":[58.7,304.6,1039.9,916.8,1037.5,189.0],"t":"city"},{"n":"압구정동","s":3080.2,"b":[74.3,291.8,821.7,866.7,809.1,216.6],"t":"city"},{"n":"청담동","s":2918.1,"b":[53.6,230.4,754.6,955.7,740.8,183.0],"t":"city"},{"n":"영등포동","s":2627.5,"b":[106.4,354.0,616.0,708.2,655.5,187.3],"t":"market"},{"n":"명동","s":2605.0,"b":[21.1,179.1,858.7,559.7,775.0,211.4],"t":"city"},{"n":"신사동","s":2480.3,"b":[68.9,299.0,645.6,628.6,627.1,211.1],"t":"city"},{"n":"논현1동","s":2469.0,"b":[91.2,309.8,654.6,629.5,577.5,206.3],"t":"city"},{"n":"노량진1동","s":2339.2,"b":[151.8,423.7,445.8,481.5,719.0,117.4],"t":"market"},{"n":"독산1동","s":2221.7,"b":[51.8,508.3,748.0,612.3,253.2,48.1],"t":"market"},{"n":"건대","s":848.2,"b":[77.6,56.5,149.7,139.5,272.2,152.8],"t":"city"},{"n":"이태원","s":737.4,"b":[169.0,39.8,106.1,112.7,175.2,134.5],"t":"city"}];
+const BANDS=['00–06','06–11','11–14','14–17','17–21','21–24'],BAND_KO=['심야','아침','점심','오후','저녁','밤'];
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const fmt=v=>Math.round(v).toLocaleString('ko-KR');
+const jo=(w,a,b)=>{const c=w.charCodeAt(w.length-1);return w+((c>=0xAC00&&c<=0xD7A3&&(c-0xAC00)%28)?a:b)};
+const DASH='index.html'+(location.search?location.search:'');
+
+/* ---------- title letters ---------- */
+(()=>{const t=$('.title');[...'서울 상권 펄스'].forEach((ch,i)=>{if(ch===' '){t.append(document.createTextNode(' '));const sp=document.createElement('span');sp.style.width='.3em';t.append(sp);return}
+  const s=document.createElement('span');s.className='ch'+(i>=6?' pink':'');s.style.setProperty('--i',i);s.textContent=ch;t.append(s)})})();
+
+/* ---------- S2 sheet rows (real 26Q2 numbers) ---------- */
+(()=>{const rows=[];for(let k=0;k<2;k++)AREAS.forEach(a=>rows.push(`<div><span>${a.n}</span><span class="v">${fmt(a.s)}억</span><span class="v">${BAND_KO[a.b.indexOf(Math.max(...a.b))]}</span><span class="v">${a.t==='market'?'시장·도매':'소비·서비스'}</span><span class="v">26Q2</span></div>`));$('#rows').innerHTML=rows.join('')})();
+
+/* ---------- S3 city ---------- */
+const city=$('#city'),NS='http://www.w3.org/2000/svg';
+const order=(()=>{const idx=AREAS.map((a,i)=>i).sort((p,q)=>AREAS[q].s-AREAS[p].s),out=[];idx.forEach((v,k)=>k%2?out.push(v):out.unshift(v));return out})(); // tallest in the middle
+const W=1200,n=AREAS.length,slot=W/(n+1),bw=slot*.62,dx=bw*.42,dy=bw*.24;
+let H=610,GROUND=565,MAXH=500; /* portrait screens get a taller box so the towers stay big */
+function layoutCity(){const r=city.getBoundingClientRect();if(!r.width)return;H=Math.max(610,Math.min(2400,W*r.height/r.width));GROUND=H-45;MAXH=GROUND-110;city.setAttribute('viewBox',`0 0 ${W} ${H}`);const gl=city.querySelector('line');if(gl){gl.setAttribute('y1',GROUND);gl.setAttribute('y2',GROUND)}towers.forEach(t=>t.win.innerHTML='')}
+addEventListener('resize',layoutCity);
+const BMAX=Math.max(...AREAS.flatMap(a=>a.b));
+const towers=order.map((ai,k)=>{
+  const a=AREAS[ai],x=slot*(k+.75),g=document.createElementNS(NS,'g');
+  g.innerHTML=`<polygon class="side"/><rect class="front" rx="2"/><polygon class="roof"/><g class="win"></g><text class="lbl" text-anchor="middle"></text><text class="nm" text-anchor="middle"></text>`;
+  city.append(g);return{a,x,g,h:0,target:0,front:g.querySelector('.front'),side:g.querySelector('.side'),roof:g.querySelector('.roof'),win:g.querySelector('.win'),lbl:g.querySelector('.lbl'),nm:g.querySelector('.nm')}});
+city.insertAdjacentHTML('afterbegin',`<defs>
+  <linearGradient id="gBase" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fb7ea"/><stop offset="1" stop-color="#16506f"/></linearGradient>
+  <linearGradient id="gMarket" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b08cff"/><stop offset="1" stop-color="#3d2a6e"/></linearGradient>
+  <linearGradient id="gSel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff7cc0"/><stop offset="1" stop-color="#7a1648"/></linearGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs><line x1="0" x2="${W}" y1="${GROUND}" y2="${GROUND}" stroke="rgba(156,195,245,.25)"/>`);
+let lead=-1;
+function drawCity(){
+  towers.forEach((t,i)=>{
+    const h=Math.max(2,t.h),x=t.x,y=GROUND-h,sel=i===lead,grad=sel?'url(#gSel)':t.a.t==='market'?'url(#gMarket)':'url(#gBase)';
+    t.front.setAttribute('x',x-bw/2);t.front.setAttribute('y',y);t.front.setAttribute('width',bw);t.front.setAttribute('height',h);t.front.setAttribute('fill',grad);
+    t.side.setAttribute('points',`${x+bw/2},${y} ${x+bw/2+dx},${y-dy} ${x+bw/2+dx},${GROUND-dy} ${x+bw/2},${GROUND}`);
+    t.side.setAttribute('fill',sel?'#5c1036':t.a.t==='market'?'#2a1d4d':'#0f3a52');
+    t.roof.setAttribute('points',`${x-bw/2},${y} ${x+bw/2},${y} ${x+bw/2+dx},${y-dy} ${x-bw/2+dx},${y-dy}`);
+    t.roof.setAttribute('fill',sel?'#ffc2e2':t.a.t==='market'?'#d8c6ff':'#a8dcf7');
+    t.g.setAttribute('filter',sel?'url(#glow)':'');
+    t.lbl.setAttribute('x',x+dx/2);t.lbl.setAttribute('y',y-dy-10);t.lbl.textContent=sel?fmt(t.target)+'억':'';t.lbl.setAttribute('fill','#ffd0e8');
+    t.nm.setAttribute('x',x+dx/2);t.nm.setAttribute('y',GROUND+34);t.nm.textContent=sel?t.a.n:'';
+    t.nm.setAttribute('fill',sel?'#ff9cd0':'#8a93a0');
+    // windows: a few lit rows, more when taller
+    const rows=Math.floor(h/18);if(t.win.childElementCount!==rows){let s='';for(let r=1;r<rows;r++)for(let c=0;c<3;c++)if((r*7+c*3+i)%5)s+=`<rect x="${x-bw/2+5+c*(bw-10)/3}" y="${GROUND-r*18}" width="${(bw-10)/3-4}" height="6" rx="1"/>`;t.win.innerHTML=s}
+    t.win.setAttribute('fill',sel?'rgba(255,230,245,.7)':'rgba(220,240,255,.35)');
+  })}
+function setBand(k){
+  const vals=AREAS.map(a=>a.b[k]);
+  towers.forEach(t=>{t.target=t.a.b[k]});
+  lead=towers.reduce((m,t,i)=>t.target>towers[m].target?i:m,0);
+  $('#clock').textContent=BANDS[k];
+  const sum=vals.reduce((p,q)=>p+q,0);
+  countTo($('#sum'),sum,'억 원',600);
+  $('#sumL').textContent=`리포트 20곳 · 26년 2분기 ${BAND_KO[k]} 시간대 추정매출`;
+  const L=towers[lead].a;
+  $('#leader').innerHTML=`<span class="tag">${BAND_KO[k]} 1위</span><b>${L.n}</b><span style="color:var(--muted)">${fmt(L.b[k])}억 원 · ${L.t==='market'?'시장·도매형':'소비·서비스형'}</span>`;
+}
+let cityRAF=0;function animCity(){towers.forEach(t=>{const goal=t.target/BMAX*MAXH;t.h+=(goal-t.h)*.12});drawCity();cityRAF=requestAnimationFrame(animCity)}
+let bandTimer=0;
+function startCity(){layoutCity();cancelAnimationFrame(cityRAF);clearInterval(bandTimer);towers.forEach(t=>t.h=0);let k=0;setBand(0);animCity();
+  bandTimer=setInterval(()=>{k++;if(k>=BANDS.length){clearInterval(bandTimer);return}setBand(k)},1150)}
+function stopCity(){cancelAnimationFrame(cityRAF);clearInterval(bandTimer)}
+
+/* ---------- counters & typing ---------- */
+function countTo(el,to,suffix='',ms=1200){const from=parseFloat((el.dataset.v||'0'));el.dataset.v=to;const t0=performance.now();
+  (function f(t){const p=Math.min(1,(t-t0)/ms),e=1-Math.pow(1-p,3);el.textContent=fmt(from+(to-from)*e)+suffix;if(p<1)requestAnimationFrame(f)})(t0)}
+const typers=[];function typeText(el,text,ms=38,delay=0){el.textContent='';el.classList.add('caret');const id=setTimeout(function go(i=0){el.textContent=text.slice(0,i);if(i<text.length)typers.push(setTimeout(()=>go(i+1),ms));else el.classList.remove('caret')},delay);typers.push(id)}
+function clearTypers(){typers.splice(0).forEach(clearTimeout)}
+
+/* ---------- motes ---------- */
+(()=>{const c=$('.motes'),x=c.getContext('2d');let w,h,P=[];function rs(){w=c.width=innerWidth*devicePixelRatio;h=c.height=innerHeight*devicePixelRatio;P=Array.from({length:REDUCED?0:70},()=>({x:Math.random()*w,y:Math.random()*h,r:(Math.random()*1.6+.4)*devicePixelRatio,s:Math.random()*.4+.1,p:Math.random()<.25}))}
+  rs();addEventListener('resize',rs);(function f(){x.clearRect(0,0,w,h);P.forEach(p=>{p.y-=p.s*devicePixelRatio;if(p.y<0){p.y=h;p.x=Math.random()*w}x.beginPath();x.arc(p.x,p.y,p.r,0,7);x.fillStyle=p.p?'rgba(238,62,152,.55)':'rgba(156,195,245,.4)';x.fill()});requestAnimationFrame(f)})()})();
+
+/* ---------- timeline ---------- */
+const scenes=$$('.scene').map(el=>({el,t:+el.dataset.t,d:+el.dataset.d}));
+const END=scenes[scenes.length-1].t; // last scene stays
+let t0=performance.now(),cur=-1,paused=false,offset=0;
+function enter(i){
+  if(i===cur)return;
+  scenes.forEach((s,k)=>s.el.classList.toggle('on',k===i));
+  // restart CSS animations inside the scene
+  const el=scenes[i].el;el.querySelectorAll('*').forEach(n=>{n.style.animationName='none';void n.offsetWidth;n.style.animationName=''});
+  if(cur===2)stopCity();
+  clearTypers();
+  cur=i;
+  if(i===2)startCity();
+  if(i===3){typeText($('#typeQ'),'성수에서 카페 차리면 괜찮을까?',45,500);
+    typeText($('#typeA'),'성수의 카페(커피-음료)는 596곳, 한 곳당 월평균 추정매출은 약 956만 원이에요. 판단은 숫자를 보고 직접 해 주세요!',26,2500);
+    const nodes=$$('#flow .node');nodes.forEach(n=>n.classList.remove('lit'));nodes.forEach((n,k)=>typers.push(setTimeout(()=>n.classList.add('lit'),3300+k*550)))}
+  if(i===scenes.length-1){$$('[data-count]').forEach((el,k)=>{el.dataset.v=0;typers.push(setTimeout(()=>countTo(el,+el.dataset.count,'',1400),500+k*150))});$('#skip').textContent='지도 열기 ›';try{sessionStorage.setItem('pulseIntro','seen')}catch(e){}}
+  else $('#skip').textContent='건너뛰기 ›';
+}
+function now(){return (performance.now()-t0)/1000+offset}
+function tick(){const t=now();let i=0;scenes.forEach((s,k)=>{if(t>=s.t)i=k});enter(i);$('#prog').style.width=Math.min(100,t/END*100)+'%';requestAnimationFrame(tick)}
+function jump(sec){offset=sec;t0=performance.now()}
+/* start after fonts and images are in, so the first scene is not half over before it is painted */
+let started=false;function start(){if(started)return;started=true;requestAnimationFrame(()=>requestAnimationFrame(()=>{t0=performance.now();if(REDUCED)jump(END);tick()}))}
+Promise.all([document.fonts.ready,new Promise(r=>document.readyState==='complete'?r():addEventListener('load',r,{once:true}))]).then(start);
+setTimeout(start,3000);
+
+/* 배경음악: 브라우저가 소리 자동 재생을 막으면 '소리 켜기' 버튼이나 첫 클릭·키 입력으로 켠다. 음악 위치는 영상 시간에 맞춘다 */
+const bgm=$('#bgm'),snd=$('#snd');let soundOn=false,userOff=false,fadeT=null;
+function fadeTo(v,ms,after){clearInterval(fadeT);const v0=bgm.volume,t1=performance.now();fadeT=setInterval(()=>{const k=Math.min(1,(performance.now()-t1)/ms);bgm.volume=v0+(v-v0)*k;if(k>=1){clearInterval(fadeT);after&&after()}},30)}
+function sndUI(){snd.textContent=soundOn?'♪ 소리 끄기':'♪ 소리 켜기';snd.setAttribute('aria-pressed',soundOn);snd.classList.toggle('on',soundOn)}
+function syncMusic(){if(!soundOn)return;try{bgm.currentTime=Math.max(0,Math.min(now(),(bgm.duration||99)-.3))}catch(e){}if(bgm.paused)bgm.play().catch(()=>{})}
+function soundUp(){soundOn=true;userOff=false;sndUI();bgm.volume=0;syncMusic();bgm.play().then(()=>fadeTo(.85,700)).catch(()=>{soundOn=false;sndUI()})}
+function soundDown(){soundOn=false;userOff=true;sndUI();fadeTo(0,400,()=>bgm.pause())}
+snd.addEventListener('click',e=>{e.stopPropagation();soundOn?soundDown():soundUp()});
+addEventListener('pointerdown',e=>{if(!soundOn&&!userOff&&!e.target.closest('#snd'))soundUp()},true);
+addEventListener('keydown',()=>{if(!soundOn&&!userOff)soundUp()},true);
+bgm.addEventListener('canplay',function auto(){bgm.removeEventListener('canplay',auto);if(REDUCED||soundOn||userOff)return;bgm.volume=.85;try{bgm.currentTime=now()}catch(e){}bgm.play().then(()=>{soundOn=true;sndUI()}).catch(()=>{})});
+const _jump=jump;jump=function(sec){_jump(sec);syncMusic()};
+function leave(href){try{sessionStorage.setItem('pulseIntro','seen')}catch(e){}if(soundOn)fadeTo(0,350,()=>{location.href=href});else location.href=href}
+function openDash(){leave(DASH)}
+$('#go').href=DASH;$('#go').addEventListener('click',e=>{e.preventDefault();leave(DASH)});
+$('#skip').addEventListener('click',()=>{cur===scenes.length-1?openDash():jump(END)});
+$('#replay').addEventListener('click',()=>{cur=-1;jump(0)});
+addEventListener('keydown',e=>{
+  if(e.key==='Escape')openDash();
+  else if(e.key==='ArrowRight'||e.key===' '||e.key==='Enter'){if(e.target.closest&&e.target.closest('a,button'))return;e.preventDefault();const nx=scenes[Math.min(cur+1,scenes.length-1)];jump(nx.t)}
+  else if(e.key==='ArrowLeft'){const pv=scenes[Math.max(cur-1,0)];cur=-1;jump(pv.t)}
+});
+</script>
