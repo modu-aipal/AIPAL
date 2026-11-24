@@ -20,9 +20,9 @@ A → B 호출은 Vercel 서버 함수가 API 키를 붙여 전달 (키가 브�
 
 | 역할 | 담당 | 한 일 | 위치 |
 |---|---|---|---|
-| **A:유진아** 대시보드 | maidysound-netizen | 3D 지도·리포트·가게 검색·펄이 화면, Vercel 배포, B 호출 프록시 | [`dashboard/`](./dashboard) |
-| **B:정채홍** AI 분석 | genJ-M | 질문 해석·분석 계획 검증·계산 요청·답변 구성, API 키 보호 | [`app/`](./app) |
-| **C:이성균** 데이터·계산 | castlegyun | 공공데이터 정의 확정, 계산 엔진, 정답표·검증 | [`calc_engine/`](./calc_engine) |
+| **A** 대시보드 | maidysound-netizen | 3D 지도·리포트·가게 검색·펄이 화면, Vercel 배포, B 호출 프록시 | [`dashboard/`](./dashboard) |
+| **B** AI 분석 | genJ-M | 질문 해석·분석 계획 검증·계산 요청·답변 구성, API 키 보호 | [`app/`](./app) |
+| **C** 데이터·계산 | castlegyun | 공공데이터 정의 확정, 계산 엔진, 정답표·검증 | [`calc_engine/`](./calc_engine) |
 
 ---
 
