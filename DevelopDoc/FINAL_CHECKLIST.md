@@ -119,7 +119,7 @@ Blocker 0건  AND  Major 0건  →  제출 승인
 - [ ] 선택 상권 강조(분홍)가 건물 모델에도 보임
 - [ ] 발표 노트북에서 FPS 30 이상 (재생 버튼으로 하루 흐름)
 - [ ] 실제 폰에서 첫 로딩 시간·버벅임
-- [ ] 출처 표기: Sentinel-2, © OpenStreetMap contributors(ODbL), ambientCG·Poly Haven(CC0), 팀 Meshy 모델 (화면 출처 문구)
+- [ ] 출처 표기: Sentinel-2, © OpenStreetMap contributors(ODbL), ambientCG·Poly Haven(CC0), 유진아 Meshy 모델 (화면 출처 문구)
 - [ ] 건물 5종 적용 후 위 항목 재확인
 
 ---
