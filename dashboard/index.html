@@ -105,7 +105,9 @@ button{font:inherit;color:inherit}
 /* a closed panel is hidden once it has slid out, so it can't be tabbed into or scrolled into view */
 .side[data-open="false"]{visibility:hidden;transition:transform .45s var(--ease),visibility 0s linear .45s}
 .side[data-open="false"] .handle{visibility:visible}
-@media (max-width:820px){.side.left,.side.right{width:min(86vw,380px)}}
+@media (max-width:820px){.side.left,.side.right{width:min(86vw,380px)}
+  /* phones: panels still slide in from the sides but use only the lower half, so the city stays visible above them and the timeline below */
+  .side.left,.side.right{top:auto;bottom:84px;height:min(48%,460px)}}
 .side::before{content:"";position:absolute;inset:-1px;border-radius:16px;pointer-events:none;
   background:linear-gradient(var(--sel),var(--sel)) 0 0/14px 1px no-repeat,linear-gradient(var(--sel),var(--sel)) 0 0/1px 14px no-repeat;opacity:.7}
 .handle{position:absolute;top:50%;width:26px;height:68px;margin-top:-34px;border:1px solid var(--edge);background:var(--glass);color:var(--ink-2);cursor:pointer;backdrop-filter:blur(10px);font-size:13px;padding:0}
@@ -1176,7 +1178,7 @@ void main(){
   new ResizeObserver(resize).observe(host);resize();
   const v=new THREE.Vector3();
   function place(el,p,vis){if(!vis){el.style.display='none';return}v.copy(p).project(camera);if(v.z>1){el.style.display='none';return}el.style.display='';el.style.transform=`translate(${((v.x+1)/2*W).toFixed(1)}px,${((1-v.y)/2*H).toFixed(1)}px) translate(-50%,-100%)`}
-  let shift=0,shift0=0,last=performance.now(),frames=0,slow=0,low=false;
+  let shift=0,shift0=0,shiftY=0,last=performance.now(),frames=0,slow=0,low=false;
   function applyLow(){low=true;pr=1;composer=null;renderer.shadowMap.enabled=false;sun.castShadow=false;if(flare)flare.visible=false;flare=null;renderer.setPixelRatio(1);resize();pg.setDrawRange(0,Math.floor(PN*.4))}
   function frame(now){
     requestAnimationFrame(frame);
@@ -1184,13 +1186,13 @@ void main(){
     const dt=Math.min(.05,(now-last)/1000);last=now;
     /* adaptive quality: sample frame time after warm-up */
     if(!low&&!reduce){frames++;if(frames>40&&frames<160&&dt>.032)slow++;if(frames===160&&slow>60)applyLow()}
-    const lw=state.left&&!isMobile()?352:0,rw=state.right&&!isMobile()?412:0,shiftT=(lw-rw)/2;
+    const lw=state.left&&!isMobile()?352:0,rw=state.right&&!isMobile()?412:0,shiftT=(lw-rw)/2,shiftYT=isMobile()&&(state.left||state.right)?H*.24:0;
     introT+=dt;if(introCam&&introT>=6.5)flyTo(null);if(introT>=6.5&&introUntil===Infinity)introUntil=performance.now()+2600;
     const k=reduce?1:Math.min(1,dt*(introT<9?1.1:2.6));
-    const moving=Math.abs(shiftT-shift)>.3||Math.abs(lw+rw-shift0)>.3||cam.t.distanceTo(goal.t)>.01||Math.abs(goal.R-cam.R)>.01||Math.abs(par.x-parT.x)>.002||Math.abs(par.y-parT.y)>.002;
+    const moving=Math.abs(shiftT-shift)>.3||Math.abs(shiftYT-shiftY)>.3||Math.abs(lw+rw-shift0)>.3||cam.t.distanceTo(goal.t)>.01||Math.abs(goal.R-cam.R)>.01||Math.abs(par.x-parT.x)>.002||Math.abs(par.y-parT.y)>.002;
     if(reduce&&!moving&&!isDirty)return;
     isDirty=false;
-    shift+=(shiftT-shift)*k;shift0+=((lw+rw)-shift0)*k;camera.setViewOffset(W,H,-shift,0,W,H);
+    shift+=(shiftT-shift)*k;shiftY+=(shiftYT-shiftY)*k;shift0+=((lw+rw)-shift0)*k;camera.setViewOffset(W,H,-shift,shiftY,W,H);
     cam.t.lerp(goal.t,k);cam.R+=(goal.R-cam.R)*k;cam.h+=(goal.h-cam.h)*k;
     if(!reduce){par.x+=(parT.x-par.x)*Math.min(1,dt*3);par.y+=(parT.y-par.y)*Math.min(1,dt*3)}
     if(!drag&&Math.abs(yawV)>1e-4){yaw+=yawV;yawV*=Math.pow(.9,dt*60);isDirty=true}
