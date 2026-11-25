@@ -1,11 +1,13 @@
 import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+
+from app.core.security import require_api_key
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services import ollama
 
-router = APIRouter(tags=["chat (dev)"])
+router = APIRouter(tags=["chat (dev)"], dependencies=[Depends(require_api_key)])
 
 
 @router.post("/chat", response_model=ChatResponse)
