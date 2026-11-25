@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
+
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.core.security import require_api_key
 from app.schemas.calc import CalcApiResponse
 from app.schemas.plan import AnalysisPlan, PlanRequest, PlanResponse
 from app.services import ollama, planner
@@ -15,7 +17,7 @@ from app.services.calc import (
 )
 from app.services.calc.errors import CalcEngineError
 
-router = APIRouter(tags=["calc"])
+router = APIRouter(tags=["calc"], dependencies=[Depends(require_api_key)])
 
 
 class AnalyzeResponse(BaseModel):

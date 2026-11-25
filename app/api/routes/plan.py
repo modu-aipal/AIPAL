@@ -1,11 +1,13 @@
 import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+
+from app.core.security import require_api_key
 from app.schemas.plan import PlanRequest, PlanResponse
 from app.services import ollama, planner
 
-router = APIRouter(tags=["plan"])
+router = APIRouter(tags=["plan"], dependencies=[Depends(require_api_key)])
 
 
 @router.post("/plan", response_model=PlanResponse)
