@@ -1498,6 +1498,7 @@ async function askApi(q,history){
     const d=body&&body.detail;
     if(r.status===422&&d&&d.error==='needs_clarification'){const str=v=>typeof v==='string'?v.trim():'';
       return{kind:'clarify',reason:str(d.reason),question:str(d.clarification_question),suggestions:(Array.isArray(d.suggested_questions)?d.suggested_questions:[]).map(str).filter(Boolean).slice(0,3)}}
+    if(r.status===429){const w=Number(r.headers.get('Retry-After'))||Number(body&&body.retry_after)||60;return{kind:'error',text:`질문이 너무 잦아요. ${w}초 뒤에 다시 물어봐 주세요.`}}
     if(r.status===401)return{kind:'error',text:'분석 서버가 API 키를 요구해요. 키는 이 페이지에 넣지 말고 서버 쪽 프록시에서 붙여야 해요.'};
     return{kind:'error',text:`분석 서버 오류 (${r.status})`+(typeof d==='string'?': '+d:'')}
   }catch(e){return{kind:'offline',text:e.name==='AbortError'?'분석 서버 응답 시간이 초과됐어요.':'분석 서버에 연결할 수 없어요.'}}
