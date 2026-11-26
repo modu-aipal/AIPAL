@@ -1415,7 +1415,7 @@ function clearChat(){apiSeq++;askTimer.forEach(clearTimeout);askTimer=[];chatHis
 function newTurn(q){chatHist=[...chatHist,q].slice(-3);['bubble','trace','answer','sql'].forEach(id=>{const e=document.getElementById(id);if(e)e.removeAttribute('id')});
   const me=document.createElement('div');me.className='me';me.textContent=q;
   const row=document.createElement('div');row.className='botrow';
-  row.innerHTML=`<span class="mini">${MINI}</span><div class="bubble" id="bubble"><div class="trace" id="trace"><span>질문 해석</span><span>SQL 실행</span><span>상권 이동</span><span>해석 작성</span></div><div class="answer" id="answer"></div><details class="sqlbox"><summary>실행한 SQL 보기</summary><pre id="sql"></pre></details></div>`;
+  row.innerHTML=`<span class="mini">${MINI}</span><div class="bubble" id="bubble"><div class="trace" id="trace"><span>질문 해석</span><span>계산</span><span>상권 이동</span><span>해석 작성</span></div><div class="answer" id="answer"></div><details class="sqlbox"><summary>계산 방식 보기</summary><pre id="sql"></pre></details></div>`;
   pcList.append(me,row);while(pcList.children.length>25)pcList.firstElementChild.remove();toBottom()}
 function setMenu(open){document.getElementById('pmenu').dataset.open=open;document.getElementById('pfab').setAttribute('aria-expanded',open);
   if(open){const c=document.getElementById('pchat');c.dataset.open='false';if(isMobile()){setPanel('left',false);setPanel('right',false)}}}
@@ -1466,15 +1466,17 @@ document.getElementById('pcClose').onclick=()=>setChat(false);
 document.getElementById('pcClear').onclick=clearChat;
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;setMenu(false);setChat(false)});
 function pressChip(q){document.querySelectorAll('#qs .q').forEach(b=>b.setAttribute('aria-pressed',b.textContent===q))}
+/* this page computes its own answers in JS from the embedded C data; the SQL is the same calculation written as SQL, not something that ran */
+const calcNote=t=>!t||t.startsWith('--')?t:'-- 이 페이지에 들어 있는 데이터로 계산했어요. 같은 계산을 SQL로 쓰면:\n'+t;
 function ask(q,res,instant,same){
   askTimer.forEach(clearTimeout);askTimer=[];if(!same)newTurn(q);
   const steps=[...document.querySelectorAll('#trace span')];
   pressChip(q);
   if(!res){botMood('talk');steps.forEach(s=>s.classList.remove('on'));document.getElementById('sql').textContent='-- 매칭되는 질문 유형이 없어요';document.getElementById('answer').innerHTML='대시보드 데이터로는 상권 이름(예: 강남, 한강로동)이나 업종이 들어간 질문, 그리고 매출 1위 업종·주말 비중·성장률·야간 매출 질문에 답할 수 있어요.';return}
-  const fin=()=>{document.getElementById('sql').textContent=res.sql;document.getElementById('answer').innerHTML=res.text;if(!instant)botMood('talk');select(res.area,!instant)};
+  const fin=()=>{document.getElementById('sql').textContent=calcNote(res.sql);document.getElementById('answer').innerHTML=res.text;if(!instant)botMood('talk');select(res.area,!instant)};
   if(instant||reduce){steps.forEach(s=>s.classList.add('on'));fin();return}
   steps.forEach(s=>s.classList.remove('on'));document.getElementById('sql').textContent='…';document.getElementById('answer').textContent='음… 데이터를 찾아보는 중이에요';botMood('think');
-  steps.forEach((s,i)=>askTimer.push(setTimeout(()=>{s.classList.add('on');if(i===1)document.getElementById('sql').textContent=res.sql;if(i===3)fin()},250+i*380)));
+  steps.forEach((s,i)=>askTimer.push(setTimeout(()=>{s.classList.add('on');if(i===1)document.getElementById('sql').textContent=calcNote(res.sql);if(i===3)fin()},250+i*380)));
 }
 /* team AI analysis API (repo: app/api/routes/dashboard.py). Order: ?api=… (remembered in this browser; ?api= clears it,
    ?api=off turns the API off), then <meta name="aipal-api"> ("self" = this page's own origin, where the Vercel
