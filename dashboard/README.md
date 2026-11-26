@@ -66,7 +66,7 @@ API 주소: `index.html` 의 `<meta name="aipal-api" content="self">` — 페이
 
 | API 응답 | 대시보드 동작 |
 |---|---|
-| 200 `{area, sql, text}` | 답변 표시, `area` 상권으로 지도 이동 (`geondae` → 대시보드 `kondae` 매핑), `sql` 이 비면 "SQL 없이(pandas) 계산" 표시 |
+| 200 `{area, sql, text}` | 답변 표시, `area` 상권으로 지도 이동 (`geondae` → 대시보드 `kondae` 매핑), `sql` 이 비면 "SQL 없이(pandas) 계산" 표시 (말풍선의 "계산 방식 보기") |
 | 200 + Mock | `테스트용 Mock 데이터 · 실제 분석 결과 아님` 배지 (헤더 `X-Is-Mock` 또는 `text` 접두어로 판단) |
 | 422 `needs_clarification` | `clarification_question` 을 그대로 보여줌, 계산 안 함 |
 | 401 / 5xx / 연결 실패 / 150초 초과 | 사유를 표시하고, 대시보드 내장 데이터로 답할 수 있는 질문이면 그 답을 "대시보드 데이터로 답했어요" 표시와 함께 보여줌 |
